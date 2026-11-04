@@ -1,0 +1,8 @@
+node_modules
+dist
+.env
+.npm-cache
+coverage
+*.tsbuildinfo
+.DS_Store
+

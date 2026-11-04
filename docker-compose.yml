@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: konti-postgres
+    environment:
+      POSTGRES_USER: konti
+      POSTGRES_PASSWORD: konti
+      POSTGRES_DB: konti
+    ports:
+      - '5432:5432'
+    volumes:
+      - konti_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U konti -d konti']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  konti_pg:

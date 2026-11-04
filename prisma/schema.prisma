@@ -1,0 +1,282 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum InventoryMovementType {
+  ENTRY
+  EXIT
+  ADJUSTMENT
+  RETURN
+}
+
+enum MembershipStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum EntityStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum CustomerType {
+  PERSON
+  COMPANY
+}
+
+enum MileageSource {
+  SERVICE_ORDER
+  MANUAL
+  IMPORT
+}
+
+model Business {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  memberships UserBusinessMembership[]
+  products    Product[]
+  movements   InventoryMovement[]
+  customers   Customer[]
+  vehicles    Vehicle[]
+  fleets      Fleet[]
+  fleetVehicles FleetVehicle[]
+  mileageLogs VehicleMileageLog[]
+  auditLogs   AuditLog[]
+
+  @@map("businesses")
+}
+
+model User {
+  id           String           @id @default(uuid()) @db.Uuid
+  email        String           @unique
+  fullName     String           @map("full_name")
+  passwordHash String           @map("password_hash")
+  status       MembershipStatus @default(ACTIVE)
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  memberships UserBusinessMembership[]
+
+  @@map("users")
+}
+
+model UserBusinessMembership {
+  userId      String           @map("user_id") @db.Uuid
+  businessId  String           @map("business_id") @db.Uuid
+  roleCodes   String[]         @map("role_codes")
+  permissions String[]
+  status      MembershipStatus @default(ACTIVE)
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+
+  @@id([userId, businessId])
+  @@map("user_business_roles")
+}
+
+model Product {
+  id          String        @id @default(uuid()) @db.Uuid
+  businessId  String        @map("business_id") @db.Uuid
+  sku         String        @db.VarChar(80)
+  name        String        @db.VarChar(180)
+  description String?
+  unit        String        @db.VarChar(30)
+  categoryId  String?       @map("category_id") @db.Uuid
+  stock       Decimal       @default(0) @db.Decimal(14, 3)
+  minStock    Decimal       @default(0) @map("min_stock") @db.Decimal(14, 3)
+  salePrice   Decimal?      @map("sale_price") @db.Decimal(14, 2)
+  status      ProductStatus @default(ACTIVE)
+  version     Int           @default(1)
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy   String?       @map("created_by") @db.Uuid
+  updatedBy   String?       @map("updated_by") @db.Uuid
+
+  business  Business            @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  movements InventoryMovement[]
+
+  @@unique([businessId, sku])
+  @@index([businessId, status])
+  @@index([businessId, name])
+  @@map("products")
+}
+
+model InventoryMovement {
+  id                 String                 @id @default(uuid()) @db.Uuid
+  businessId         String                 @map("business_id") @db.Uuid
+  productId          String                 @map("product_id") @db.Uuid
+  type               InventoryMovementType
+  quantity           Decimal                @db.Decimal(14, 3)
+  stockBefore        Decimal                @map("stock_before") @db.Decimal(14, 3)
+  stockAfter         Decimal                @map("stock_after") @db.Decimal(14, 3)
+  reason             String?                @db.VarChar(500)
+  relatedEntityType  String?                @map("related_entity_type") @db.VarChar(50)
+  relatedEntityId    String?                @map("related_entity_id") @db.Uuid
+  operationKey       String?                @map("operation_key") @db.VarChar(180)
+  reversesMovementId String?                @map("reverses_movement_id") @db.Uuid
+  createdBy          String                 @map("created_by") @db.Uuid
+  createdAt          DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  business Business           @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  product  Product            @relation(fields: [productId], references: [id], onDelete: Restrict)
+  reverses InventoryMovement? @relation("MovementReversal", fields: [reversesMovementId], references: [id], onDelete: Restrict)
+  reversed InventoryMovement[] @relation("MovementReversal")
+
+  @@unique([businessId, operationKey])
+  @@index([businessId, createdAt(sort: Desc)])
+  @@index([businessId, productId, createdAt(sort: Desc)])
+  @@map("inventory_movements")
+}
+
+model Customer {
+  id             String       @id @default(uuid()) @db.Uuid
+  businessId     String       @map("business_id") @db.Uuid
+  type           CustomerType
+  status         EntityStatus @default(ACTIVE)
+  documentType   String?      @map("document_type") @db.VarChar(20)
+  documentNumber String?      @map("document_number") @db.VarChar(40)
+  firstName      String?      @map("first_name") @db.VarChar(120)
+  lastName       String?      @map("last_name") @db.VarChar(120)
+  nit            String?      @db.VarChar(30)
+  legalName      String?      @map("legal_name") @db.VarChar(180)
+  tradeName      String?      @map("trade_name") @db.VarChar(180)
+  contactName    String?      @map("contact_name") @db.VarChar(180)
+  phone          String?      @db.VarChar(40)
+  email          String?      @db.VarChar(180)
+  address        String?      @db.VarChar(240)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy      String?      @map("created_by") @db.Uuid
+  updatedBy      String?      @map("updated_by") @db.Uuid
+
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  vehicles Vehicle[]
+  fleets   Fleet[]
+
+  @@index([businessId, status])
+  @@index([businessId, type])
+  @@index([businessId, email])
+  @@map("customers")
+}
+
+model Vehicle {
+  id             String       @id @default(uuid()) @db.Uuid
+  businessId     String       @map("business_id") @db.Uuid
+  customerId     String       @map("customer_id") @db.Uuid
+  fleetId        String?      @map("fleet_id") @db.Uuid
+  plate          String       @db.VarChar(20)
+  vin            String?      @db.VarChar(40)
+  brand          String       @db.VarChar(80)
+  line           String       @db.VarChar(80)
+  model          String?      @db.VarChar(80)
+  year           Int?
+  vehicleType    String?      @map("vehicle_type") @db.VarChar(40)
+  color          String?      @db.VarChar(40)
+  fuelType       String?      @map("fuel_type") @db.VarChar(40)
+  engineCapacity String?      @map("engine_capacity") @db.VarChar(20)
+  version        String?      @db.VarChar(80)
+  currentMileage Int          @default(0) @map("current_mileage")
+  status         EntityStatus @default(ACTIVE)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy      String?      @map("created_by") @db.Uuid
+  updatedBy      String?      @map("updated_by") @db.Uuid
+
+  business    Business             @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  customer    Customer             @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  fleet       Fleet?               @relation(fields: [fleetId], references: [id], onDelete: Restrict)
+  mileageLogs VehicleMileageLog[]
+  assignments FleetVehicle[]
+
+  @@unique([businessId, plate])
+  @@index([businessId, customerId])
+  @@index([businessId, fleetId])
+  @@index([businessId, status])
+  @@map("vehicles")
+}
+
+model VehicleMileageLog {
+  id         String        @id @default(uuid()) @db.Uuid
+  businessId String        @map("business_id") @db.Uuid
+  vehicleId  String        @map("vehicle_id") @db.Uuid
+  mileage    Int
+  recordedAt DateTime      @default(now()) @map("recorded_at") @db.Timestamptz(6)
+  source     MileageSource
+  sourceId   String?       @map("source_id") @db.Uuid
+  recordedBy String?       @map("recorded_by") @db.Uuid
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  vehicle  Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+
+  @@index([businessId, vehicleId, recordedAt(sort: Desc)])
+  @@map("vehicle_mileage_logs")
+}
+
+model Fleet {
+  id          String       @id @default(uuid()) @db.Uuid
+  businessId  String       @map("business_id") @db.Uuid
+  customerId  String       @map("customer_id") @db.Uuid
+  name        String       @db.VarChar(180)
+  description String?
+  status      EntityStatus @default(ACTIVE)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy   String?      @map("created_by") @db.Uuid
+  updatedBy   String?      @map("updated_by") @db.Uuid
+
+  business    Business       @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  customer    Customer       @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  vehicles    Vehicle[]
+  assignments FleetVehicle[]
+
+  @@index([businessId, customerId])
+  @@index([businessId, status])
+  @@index([businessId, name])
+  @@map("fleets")
+}
+
+model FleetVehicle {
+  id           String    @id @default(uuid()) @db.Uuid
+  businessId   String    @map("business_id") @db.Uuid
+  fleetId      String    @map("fleet_id") @db.Uuid
+  vehicleId    String    @map("vehicle_id") @db.Uuid
+  assignedAt   DateTime  @default(now()) @map("assigned_at") @db.Timestamptz(6)
+  unassignedAt DateTime? @map("unassigned_at") @db.Timestamptz(6)
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  fleet    Fleet    @relation(fields: [fleetId], references: [id], onDelete: Restrict)
+  vehicle  Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+
+  @@index([businessId, fleetId])
+  @@index([businessId, vehicleId])
+  @@map("fleet_vehicles")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  businessId  String   @map("business_id") @db.Uuid
+  actorUserId String   @map("actor_user_id") @db.Uuid
+  action      String
+  entityType  String   @map("entity_type")
+  entityId    String   @map("entity_id") @db.Uuid
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+
+  @@index([businessId, createdAt(sort: Desc)])
+  @@map("audit_logs")
+}
