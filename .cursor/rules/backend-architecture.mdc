@@ -1,0 +1,125 @@
+---
+description: Arquitectura backend KONTI — monolito modular, legado vs greenfield, capas, TX, tenancy, stock y proporcionalidad.
+alwaysApply: true
+---
+
+# KONTI — Backend Architecture Rules
+
+**Fuente de verdad enforce:** este archivo (`.cursor/rules/`).  
+**Narrativa + ejemplos:** `docs/architecture/backend-architecture-standard.md`.  
+**No usar** `cursor/rules/` (deprecado).  
+Convenciones de código/tests: `backend-development.mdc`.
+
+## 1. Objetivo
+
+Monolito modular NestJS mantenible. Primero la responsabilidad; después la implementación.
+
+- No microservicios ni event bus en MVP.
+- No reescrituras masivas de módulos estables.
+- No complejidad ni patrones por moda.
+
+## 2. Decisiones base
+
+| Decisión | Estado |
+| --- | --- |
+| Modular monolith | Obligatorio |
+| Onion (deps hacia Domain) | Obligatorio |
+| Hexagonal (ports/adapters) | Greenfield **cuando aporte valor** |
+| Microservicios / GenericRepository / interface-por-clase | Prohibido |
+| CQRS/MediatR / Result obligatorio / entidades ricas artificiales | No introducir por defecto |
+
+```text
+Presentation → Application → Domain
+Infrastructure implementa puertos de Application/Domain
+```
+
+## 3. LEGACY vs GREENFIELD (regla fundamental)
+
+### LEGACY — módulos actuales
+
+`identity`, `customers`, `vehicles`, `fleets`, `products`, `inventory`, `audit`, `health`
+
+- Prisma en Application: **aceptado**.
+- No reescribir por uniformidad ni “para cumplir Clean Architecture”.
+- Refactor solo por dolor demostrado (bug de frontera, consumidor cross-module, mantenimiento).
+- Al tocar un use case: preservar el estilo del módulo salvo ticket que pida puerto.
+
+### GREENFIELD — módulos nuevos (p. ej. service-orders, attachments, catalog, sales HTTP)
+
+- Capas reales cuando el problema lo justifique; **sin carpetas vacías**.
+- Prisma **solo** en Infrastructure.
+- Domain y Application **sin** `@prisma/client` ni `Prisma.TransactionClient` ni modelos generados.
+- Puertos/adapters **solo** con necesidad real (persistencia, TX compartida, límite entre módulos, test double).
+- TX vía `UnitOfWork` / `TransactionPort` opaco hacia Application.
+- Al consumir legado: port/adapter en el **borde del módulo nuevo**; no reescribir el legado.
+
+Detalle y árboles de carpetas: estándar §2–§4.
+
+## 4. Responsabilidades por capa
+
+### Presentation
+
+Controllers, DTOs + `class-validator`, guards/permisos, map a input de use case, presenters (`presentPage`).  
+**Prohibido:** reglas de negocio, Prisma, abrir TX, orquestar módulos.
+
+### Application
+
+Use cases (una intención), inputs/outputs tipados, orquestación, precondiciones, puertos si hay frontera, coordinación TX (greenfield vía puerto).  
+**Greenfield:** no importar Prisma. **Legado:** `PrismaService` / `$transaction` OK.
+
+### Domain
+
+Invariantes, políticas, VO/helpers **si aportan**. Sin NestJS, Prisma ni HTTP. Vitest puro.
+
+### Infrastructure
+
+Prisma, repos concretos justificados, adapters, UoW, storage/JWT. Encapsula `TransactionClient`. Sin reglas de negocio.
+
+## 5. Transacciones y multi-módulo
+
+1. Límite TX **explícito** por operación de negocio multi-recurso.
+2. Una sola TX PostgreSQL compartida; fallo → rollback total de esa unidad.
+3. Prohibido N transacciones independientes para la misma intención atómica.
+4. Greenfield: Application no ve `Prisma.TransactionClient`.
+5. Auditoría (`AuditService.record`) en la **misma** TX cuando el contrato lo pida.
+6. Locks: respetar `docs/lock-order.md`.
+7. **Stock:** único escritor = `InventoryStockService.apply` (nunca `product.update({ stock })`).  
+   Referencia: `apply(input, tx?)` + `operationKey`; exportado por `InventoryModule`.  
+   No inventar abstracciones nuevas sobre stock hasta un consumidor greenfield lo exija; tipar la frontera en el borde del módulo nuevo.
+
+## 6. Multitenancy y dominio
+
+- Tenant = `Business`. `Customer` = cliente del taller.
+- Filtrar por `businessId` del **contexto** (no solo body/URL).
+- Auth ≠ authz; permisos en backend.
+- Prohibido `oil_changes`; servicios genéricos; evidencias polimórficas (`entityType` + `entityId`).
+- FK tenant en tablas nuevas: patrón compuesto desde día 1 (ver auditorías H-07); no reabrir F0–F5 sin evidencia.
+
+## 7. Fronteras entre módulos
+
+- Preferir **servicio exportado** o puerto (ej. `InventoryStockService`, `AuditService`).
+- No importar use cases internos ajenos “por comodidad”.
+- Helpers de dominio puros compartidos (ej. ownership) OK; mover a `shared` solo si un 3.er módulo lo necesita.
+
+## 8. Proporcionalidad — no introducir automáticamente
+
+- GenericRepository / BaseRepository
+- CQRS / MediatR
+- Interface por cada clase o use case
+- Result Pattern obligatorio
+- Entidades ricas artificiales
+- Abstracciones sin consumidores reales
+- Carpetas vacías “por simetría”
+- Reescritura Hexagonal del legado
+- Segundo logger (Pino); canónico = `AppLogger`
+
+## 9. Antes de implementar / criterio de aceptación
+
+1. `docs/INDEX.md` + contrato + estándar arquitectónico.
+2. ¿Legado o greenfield?
+3. TX, permisos, auditoría, tenancy, locks, stock.
+4. Reutilizar antes de duplicar.
+
+Listo si: controller solo HTTP; reglas en el lugar correcto; persistencia según §3; tenant/TX OK; sin reescritura injustificada; solución proporcional.
+
+**Ante conflicto con código legado → gana §3 LEGACY.**

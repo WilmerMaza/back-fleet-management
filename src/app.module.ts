@@ -14,6 +14,7 @@ import { PrismaModule } from './shared/database/prisma.module.js';
 import { HttpExceptionFilter } from './shared/errors/http-exception.filter.js';
 import { AuthModule } from './shared/authorization/auth.module.js';
 import { LoggingModule } from './shared/logging/logging.module.js';
+import { loadJwtModuleOptions } from './shared/config/jwt.config.js';
 
 @Module({
   imports: [
@@ -24,10 +25,7 @@ import { LoggingModule } from './shared/logging/logging.module.js';
     }),
     JwtModule.registerAsync({
       global: true,
-      useFactory: () => ({
-        secret: process.env.JWT_SECRET ?? 'dev-secret-change-me',
-        signOptions: { expiresIn: (process.env.JWT_EXPIRES_IN ?? '8h') as `${number}${'s' | 'm' | 'h' | 'd'}` },
-      }),
+      useFactory: () => loadJwtModuleOptions(),
     }),
     LoggingModule,
     AuthModule,

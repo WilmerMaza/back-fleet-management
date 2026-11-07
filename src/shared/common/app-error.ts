@@ -44,6 +44,13 @@ export const Errors = {
   tenantDenied: () =>
     new AppError('TENANT_ACCESS_DENIED', 'No hay acceso a este negocio.', 403),
   unauthorized: () => new AppError('UNAUTHORIZED', 'No autenticado.', 401),
+  rateLimited: (retryAfterSec?: number) =>
+    new AppError(
+      'RATE_LIMITED',
+      'Demasiados intentos. Espera un momento e inténtalo de nuevo.',
+      429,
+      retryAfterSec != null ? { retryAfterSec } : undefined,
+    ),
   selectBusiness: (businesses: { id: string; name: string }[]) =>
     new AppError('SELECT_BUSINESS', 'Selecciona un negocio.', 409, { businesses }),
   invalidCredentials: () =>

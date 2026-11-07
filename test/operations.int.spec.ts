@@ -36,7 +36,7 @@ describe('Clientes, vehículos y flotas (Postgres)', () => {
   beforeAll(async () => {
     container = await new PostgreSqlContainer('postgres:16-alpine').start();
     process.env.DATABASE_URL = container.getConnectionUri();
-    process.env.JWT_SECRET = 'test-secret';
+    process.env.JWT_SECRET = 'vitest-jwt-secret-konti-h04-tests-32b';
     const backendRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
     execSync('npx prisma migrate deploy && npx tsx prisma/seed.ts', {
       cwd: backendRoot,

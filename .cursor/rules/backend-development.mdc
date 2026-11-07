@@ -1,0 +1,117 @@
+---
+description: Estándares de desarrollo backend KONTI — stack, TypeScript, HTTP, tests, logging. Capas/legado → backend-architecture.mdc.
+alwaysApply: true
+---
+
+# KONTI — Backend Development Standards
+
+**Fuente de verdad:** `.cursor/rules/` (no `cursor/rules/`).  
+**Arquitectura / legado / greenfield / TX:** `backend-architecture.mdc` + `docs/architecture/backend-architecture-standard.md`.  
+Este archivo cubre **cómo escribir código**, no la forma de las capas.
+
+## 1. Objetivo
+
+Código legible, tipado, testeable y coherente con el repo — sin reescrituras masivas ni dependencias por comodidad.
+
+## 2. Antes de escribir
+
+1. `backend-architecture.mdc` (¿legado o greenfield?).
+2. `docs/INDEX.md` + contrato del dominio.
+3. Inspeccionar módulo y reutilizar.
+4. No eliminar features ni cambiar contratos sin impacto analizado.
+5. No tocar módulos ajenos a la tarea.
+
+## 3. Stack (real del repo)
+
+| Tema | Decisión |
+| --- | --- |
+| Runtime | Node.js 22+ LTS |
+| Framework | NestJS 12 |
+| Lenguaje | TypeScript strict |
+| BD / ORM | PostgreSQL 16 / Prisma 6 |
+| Auth | JWT + Argon2id |
+| Validación | `class-validator` + `ValidationPipe` (whitelist) |
+| Tests | **Vitest** (+ Testcontainers en int) — no Jest |
+| Logging | **`AppLogger`** — no Pino directo |
+| Local | Docker Compose |
+
+No instalar librerías nuevas sin evaluar necesidad y costo.
+
+Scripts: `npm test` · `npm run test:int` · `npm run start:dev`.
+
+## 4. TypeScript
+
+- Evitar `any`; preferir `unknown` en entradas dudosas.
+- Inputs de use case tipados; no `!` para ocultar null.
+- Tipos Prisma: Infrastructure (o Application **legado**); nunca Domain; nunca Application **greenfield**.
+- No duplicar tipos si ya existe contrato equivalente.
+
+```typescript
+interface CreateProductInput {
+  businessId: string;
+  sku: string;
+  name: string;
+  unit: string;
+}
+
+async execute(input: CreateProductInput): Promise<ProductView> { /* ... */ }
+```
+
+## 5. Nomenclatura
+
+| Elemento | Convención | Ejemplo |
+| --- | --- | --- |
+| Clases | PascalCase | `CreateProductUseCase` |
+| Ports / interfaces | PascalCase | `TransactionPort` |
+| Métodos / vars | camelCase | `businessId` |
+| Constantes | UPPER_SNAKE_CASE | `MAX_PAGE_SIZE` |
+| Archivos | kebab-case | `create-product.use-case.ts` |
+| DTOs HTTP | PascalCase | `CreateProductDto` |
+
+Evitar nombres vacíos (`Manager`, `Helper`, `Utils`, `Handler`) salvo rol concreto.
+
+## 6. HTTP (presentation)
+
+Base `/api/v1`. Recursos plurales. Controllers delgados: validar, authz, invocar use case, presentar. Sin Prisma ni reglas de negocio.
+
+Listados: `presentPage` → `{ data, meta }`. Detalle/mutación: presenter del módulo / contrato.  
+Errores: `AppError` + `HttpExceptionFilter` (`code`, `message`, `details`).
+
+DTO HTTP ≠ entidad dominio ≠ modelo Prisma. Validar en el borde; revalidar reglas de negocio en use case/domain.
+
+## 7. Use cases
+
+Una clase = una intención (`CreateProductUseCase`, `CompleteServiceOrderUseCase`). Coordinan; no son god-services del módulo. Dependencias según legado/greenfield (ver architecture).
+
+## 8. Persistencia y dinero
+
+- Decimales exactos (`decimal.js` / helpers); no float.
+- Stock solo vía `InventoryStockService` (architecture §5).
+- PATCH no mute campos que exigen operación de negocio específica.
+- Constraints SQL: `docs/db-constraints.md` · `npm run db:verify-constraints` cuando aplique.
+
+## 9. Logging
+
+`AppLogger` únicamente. No secretos, tokens ni PII innecesaria. Contexto útil sin filtrar datos de otros tenants. Preferir log en mutaciones críticas / errores.
+
+## 10. Pruebas (Vitest)
+
+| Tipo | Qué |
+| --- | --- |
+| Unit | Domain / helpers puros |
+| Unit | Use cases + doubles de puertos (si aporta) |
+| Int | Persistencia, TX, tenancy, permisos, idempotencia |
+
+Comportamiento (rollback, 403/404, conflicto), no solo HTTP 200. Importar desde `vitest`.
+
+## 11. Documentación de código
+
+Archivos nuevos o cambios sustanciales: JSDoc breve en **español** al inicio (rol, qué, por qué). No lo obvio.
+
+## 12. Listo
+
+- Contrato HTTP cumplido.
+- Legado/greenfield respetado.
+- Tenant, permisos, TX, stock/locks según architecture.
+- Tests proporcionales.
+- Sin cambios colaterales ni dependencias nuevas injustificadas.

@@ -1,10 +1,10 @@
 # Backend KONTI — tecnología, patrones y arquitectura
 
-Documento para **planear e iniciar** el API. El frontend Angular ya existe con mocks; el backend está en **0% de implementación**. Este archivo no sustituye los contratos: los organiza y fija cómo construirlos.
+Documento para **planear y construir** el API. El frontend Angular vive en el repo hermano `fleet-management` (mocks + contratos). Este archivo no sustituye los contratos: los organiza y fija cómo construirlos. Índice para agentes: [`INDEX.md`](./INDEX.md).
 
 | | |
 | --- | --- |
-| Estado | API Nest en este repositorio. Órdenes/ventas HTTP pendientes. |
+| Estado | Nest en este repo. Listo: auth, productos, inventario, clientes, vehículos, flotas, auditoría, tenancy. Pendiente: órdenes/ventas HTTP, usuarios/roles HTTP. |
 | Frontend | Angular 22 · `environment.apiBaseUrl` = `http://localhost:3000/api/v1` · `useMocks: true` |
 | Producto | Gestión y trazabilidad vehicular. Multi-tenant. El cambio de aceite es el primer caso de uso, no el modelo. |
 
@@ -18,47 +18,47 @@ Plataforma **SaaS multi-tenant**: cada empresa que contrata KONTI es un **negoci
 | Usuario | `users` + `user_business_roles` | Persona. Puede pertenecer a **varios** negocios. |
 | Cliente del taller | `customers` (`PERSON` \| `COMPANY`) | Dueño de vehículos **dentro** de un tenant. Nunca es el tenant. |
 
-Contrato canónico de aislamiento: [`docs/api-contracts/00-multitenancy.md`](../api-contracts/00-multitenancy.md).
+Contrato canónico de aislamiento: [`docs/api-contracts/00-multitenancy.md`](./api-contracts/00-multitenancy.md).
 
 ## 2. Inventario: lo que ya tenemos para el back
 
 ### 2.1 Contratos HTTP (fuente de verdad de endpoints)
 
-Índice: [`docs/api-contracts/README.md`](../api-contracts/README.md).
+Índice: [`docs/api-contracts/README.md`](./api-contracts/README.md).
 
 **MVP 1 (construir primero)**
 
 | Doc | Dominio |
 | --- | --- |
-| [00-architecture.md](../api-contracts/00-architecture.md) | Capas, errores, paginación, JWT, storage |
-| [00-multitenancy.md](../api-contracts/00-multitenancy.md) | Tenant, JWT claims, login 409, QA |
-| [01-auth.md](../api-contracts/01-auth.md) | Login, refresh, users |
-| [18-roles.md](../api-contracts/18-roles.md) | Roles y matriz ver/editar/eliminar |
-| [02-customers.md](../api-contracts/02-customers.md) | Clientes PERSON/COMPANY |
-| [03-vehicles.md](../api-contracts/03-vehicles.md) | Vehículos, km, hoja de vida |
-| [04-fleets.md](../api-contracts/04-fleets.md) | Flotas N:M histórica |
-| [05-service-catalog.md](../api-contracts/05-service-catalog.md) | Tipos de servicio genéricos |
-| [06-service-orders.md](../api-contracts/06-service-orders.md) | Órdenes + **completar atómico** |
-| [16-service-suggestions.md](../api-contracts/16-service-suggestions.md) | Sugerencias de producto (mock hoy) |
-| [17-sales.md](../api-contracts/17-sales.md) | Venta directa (mock hoy) |
-| [07-audit.md](../api-contracts/07-audit.md) | `audit_logs` append-only |
-| [08-attachments.md](../api-contracts/08-attachments.md) | Evidencias + URL firmada |
-| [09-inventory.md](../api-contracts/09-inventory.md) | Productos y movimientos |
-| [11-maintenance.md](../api-contracts/11-maintenance.md) | Programación por km/tiempo |
+| [00-architecture.md](./api-contracts/00-architecture.md) | Capas, errores, paginación, JWT, storage |
+| [00-multitenancy.md](./api-contracts/00-multitenancy.md) | Tenant, JWT claims, login 409, QA |
+| [01-auth.md](./api-contracts/01-auth.md) | Login, refresh, users |
+| [18-roles.md](./api-contracts/18-roles.md) | Roles y matriz ver/editar/eliminar |
+| [02-customers.md](./api-contracts/02-customers.md) | Clientes PERSON/COMPANY |
+| [03-vehicles.md](./api-contracts/03-vehicles.md) | Vehículos, km, hoja de vida |
+| [04-fleets.md](./api-contracts/04-fleets.md) | Flotas N:M histórica |
+| [05-service-catalog.md](./api-contracts/05-service-catalog.md) | Tipos de servicio genéricos |
+| [06-service-orders.md](./api-contracts/06-service-orders.md) | Órdenes + **completar atómico** |
+| [16-service-suggestions.md](./api-contracts/16-service-suggestions.md) | Sugerencias de producto (mock hoy) |
+| [17-sales.md](./api-contracts/17-sales.md) | Venta directa (mock hoy) |
+| [07-audit.md](./api-contracts/07-audit.md) | `audit_logs` append-only |
+| [08-attachments.md](./api-contracts/08-attachments.md) | Evidencias + URL firmada |
+| [09-inventory.md](./api-contracts/09-inventory.md) | Productos y movimientos |
+| [11-maintenance.md](./api-contracts/11-maintenance.md) | Programación por km/tiempo |
 
 **MVP 2+ (no abrir hasta congelar MVP 1)**
 
 Notificaciones, portales, documentos vehiculares (SOAT/RTM/seguro), reportes, expansión: contratos 12, 13, 14, 15, 22, 24.
 
-**Propuesta comercial (no es contrato vigente):** [`docs/arquitectura-comercial/`](../arquitectura-comercial/README.md). Facturación electrónica **fuera** de este plan.
+**Propuesta comercial (no es contrato vigente):** [`docs/arquitectura-comercial/`](./arquitectura-comercial/README.md). Facturación electrónica **fuera** de este plan.
 
 ### 2.2 Dominio y reglas ya escritas
 
-- Modelo: [`docs/domain-model.md`](../domain-model.md)
-- Plan de fases: [`docs/PLAN_EJECUCION_COMPLETO.md`](../PLAN_EJECUCION_COMPLETO.md)
-- Tipos TS del front (espejo del contrato): `src/app/data-access/models/`
-- Repositorios abstractos (firma que copiará `HttpRepository`): `src/app/data-access/repositories/`
-- Comportamiento de demo: `src/app/data-access/mocks/` (dos tenants: `biz-001` Taller Demo Fleet, `biz-002` Lubricantes del Norte)
+- Modelo: [`docs/domain-model.md`](./domain-model.md)
+- Plan de fases: [`docs/PLAN_EJECUCION_COMPLETO.md`](./PLAN_EJECUCION_COMPLETO.md)
+- Spec inventario (este repo): [`PRODUCTS_INVENTORY_SPEC.md`](./PRODUCTS_INVENTORY_SPEC.md)
+- Análisis productos: [`analysis/products/`](./analysis/products/)
+- En el frontend (`fleet-management`): tipos `src/app/data-access/models/`, repositorios abstractos `.../repositories/`, mocks `.../mocks/` (tenants demo `biz-001` Taller Demo Fleet, `biz-002` Lubricantes del Norte)
 
 ### 2.3 Lo que el front espera del API
 
@@ -104,9 +104,9 @@ El plan de ejecución pide **NestJS u equivalente**. Aquí se concreta para no r
 | Hash | Argon2id | Estándar actual; bcrypt aceptable |
 | Storage | S3 compatible (AWS S3 en prod; MinIO en local) | URLs firmadas PUT |
 | Cola | **BullMQ + Redis** (desde MVP 2) | Notificaciones y evaluación de mantenimientos. MVP 1 puede usar cron in-process |
-| Observabilidad | Pino (logs JSON) + `GET /health` | Ambientes DEV/QA/PROD |
-| Validación | Zod o `class-validator` (elegir **uno**) | Errores `VALIDATION_ERROR` |
-| Tests | Vitest o Jest + Testcontainers Postgres | Isolation tenancy es criterio de DoD |
+| Observabilidad | **`AppLogger`** + sinks (console / Better Stack) + `GET /health` | No Pino directo; ver `src/shared/logging/` |
+| Validación | `class-validator` (elegido) | Errores `VALIDATION_ERROR` |
+| Tests | **Vitest** + Testcontainers Postgres | No Jest; isolation tenancy es criterio de DoD |
 | Local | Docker Compose: API + Postgres + MinIO | `apiBaseUrl` del front ya apunta a `:3000` |
 
 No hace falta Kubernetes ni event bus en el primer corte.
@@ -134,7 +134,7 @@ No hay consola superadmin KONTI en MVP 1: el primer `businesses` se crea por ope
 
 ## 5. Arquitectura de aplicación
 
-Alineada a `00-architecture.md`:
+Alineada a `00-architecture.md` y a las reglas Cursor en [`.cursor/rules/`](../.cursor/rules/) (auditoría: [`audits/architecture-rules-audit.md`](./audits/architecture-rules-audit.md)).
 
 ```text
 HTTP (controllers)
@@ -142,6 +142,8 @@ HTTP (controllers)
         → Domain (reglas: transiciones, stock, tenancy)
             → Infrastructure (Prisma, S3, JWT)
 ```
+
+**Política legado vs greenfield:** módulos nuevos aplican capas + Prisma solo en Infrastructure; módulos existentes no se reescriben por obligación (Prisma en Application permanece hasta extracción justificada). Detalle: `.cursor/rules/backend-architecture.mdc`.
 
 ### 5.1 Módulos Nest (mapa 1:1 con el dominio)
 
@@ -193,7 +195,7 @@ Un `GET` de un recurso de otro taller: **404** (no filtrar existencia) o **403**
 
 ### 6.1 Completar orden (patrón de consistencia)
 
-Único flujo que demuestra el núcleo. Debe ser **atómico** ([06](../api-contracts/06-service-orders.md)):
+Único flujo que demuestra el núcleo. Debe ser **atómico** ([06](./api-contracts/06-service-orders.md)):
 
 1. Transición a `COMPLETED` + `closed_at` + `closed_by_user_id`.
 2. `mileage >= vehicle.current_mileage` → log + update vehículo.
@@ -251,7 +253,7 @@ Más adelante (no bloquear MVP 1): `maintenance_records`, `notifications`, `noti
 
 PK de vehículo: UUID, **no** la placa. Placa única por `(business_id, plate)` si se exige unicidad.
 
-`audit_logs`: ver columnas e índices en [07-audit.md](../api-contracts/07-audit.md).
+`audit_logs`: ver columnas e índices en [07-audit.md](./api-contracts/07-audit.md).
 
 ## 8. Convención HTTP (implementar igual en todos los módulos)
 
@@ -359,10 +361,10 @@ Un usuario acumula permisos de todos los roles de **ese** negocio.
 ## 14. Lectura mínima antes de picar código
 
 1. Este archivo.
-2. [`00-multitenancy.md`](../api-contracts/00-multitenancy.md)
-3. [`00-architecture.md`](../api-contracts/00-architecture.md)
-4. [`01-auth.md`](../api-contracts/01-auth.md) + [`18-roles.md`](../api-contracts/18-roles.md)
-5. [`06-service-orders.md`](../api-contracts/06-service-orders.md) + [`07-audit.md`](../api-contracts/07-audit.md)
-6. [`domain-model.md`](../domain-model.md)
+2. [`00-multitenancy.md`](./api-contracts/00-multitenancy.md)
+3. [`00-architecture.md`](./api-contracts/00-architecture.md)
+4. [`01-auth.md`](./api-contracts/01-auth.md) + [`18-roles.md`](./api-contracts/18-roles.md)
+5. [`06-service-orders.md`](./api-contracts/06-service-orders.md) + [`07-audit.md`](./api-contracts/07-audit.md)
+6. [`domain-model.md`](./domain-model.md)
 
 Demo de aislamiento en el mock: `admin@norte.local` / `demo123` (Lubricantes del Norte) vs `admin@fleet.local` / `demo123` (Taller Demo Fleet). El operador `operador@fleet.local` pertenece a los dos.

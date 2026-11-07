@@ -1,0 +1,12 @@
+---
+description: DEPRECADO — usar .cursor/rules/backend-development.mdc
+alwaysApply: false
+---
+
+# Deprecado
+
+Este archivo ya **no** es la fuente de verdad.
+
+Usar: **`.cursor/rules/backend-development.mdc`**
+
+Ver `cursor/rules/README.md` y `docs/audits/architecture-rules-audit.md`.

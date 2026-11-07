@@ -3,7 +3,18 @@
 API NestJS de Gestión y Trazabilidad Vehicular. PostgreSQL + Prisma.  
 Multi-tenant: el tenant es `Business` (empresa que contrata KONTI). `Customer` es el cliente del taller.
 
-Contratos de producto: repositorio frontend [`WilmerMaza/fleet-management`](https://github.com/WilmerMaza/fleet-management) (`docs/api-contracts/`). Spec de inventario: [`docs/PRODUCTS_INVENTORY_SPEC.md`](docs/PRODUCTS_INVENTORY_SPEC.md).
+## Documentación (local)
+
+| Doc | Uso |
+| --- | --- |
+| [`docs/INDEX.md`](docs/INDEX.md) | Índice para humanos y agentes IA |
+| [`docs/PLAN.md`](docs/PLAN.md) | Stack, arquitectura, orden de cortes |
+| [`docs/api-contracts/`](docs/api-contracts/) | Contratos HTTP (espejo del front) |
+| [`docs/domain-model.md`](docs/domain-model.md) | Modelo de dominio |
+| [`docs/PRODUCTS_INVENTORY_SPEC.md`](docs/PRODUCTS_INVENTORY_SPEC.md) | Spec de inventario |
+| [`AGENTS.md`](AGENTS.md) | Contexto operativo para agentes |
+
+Frontend hermano: [`WilmerMaza/fleet-management`](https://github.com/WilmerMaza/fleet-management). Ver [`docs/SOURCE.md`](docs/SOURCE.md) para el origen de las copias.
 
 ## Arranque
 
@@ -54,7 +65,10 @@ curl http://localhost:3000/api/v1/businesses/11111111-1111-4111-8111-11111111111
 ```bash
 npm test          # unitarias
 npm run test:int  # PostgreSQL real (Testcontainers)
+npm run db:verify-constraints  # CHECK e índices parciales SQL (H-03)
 ```
+
+Tras `prisma migrate deploy`, conviene verificar las restricciones documentadas en [`docs/db-constraints.md`](docs/db-constraints.md).
 
 ## Qué hay
 

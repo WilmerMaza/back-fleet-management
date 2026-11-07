@@ -1,5 +1,10 @@
 /**
  * Alta de vehículo: placa única por negocio y log inicial de km.
+ *
+ * Si se indica `fleetId`, la compatibilidad de propietario se revalida bajo
+ * `FOR UPDATE` de la flota dentro de la TX (OC-03), mismo prefijo de locks
+ * que Assign/UpdateFleet: fleets(id) → insert vehículo/asignación.
+ * No crea asignaciones si no se solicitó `fleetId`.
  */
 import { Injectable } from '@nestjs/common';
 import { EntityStatus, Prisma } from '@prisma/client';
@@ -9,6 +14,7 @@ import { Errors } from '../../../shared/common/app-error.js';
 import { PrismaService } from '../../../shared/database/prisma.service.js';
 import { trimOrNull } from '../../customers/domain/customer-rules.js';
 import { assertMileageChange } from '../domain/mileage.js';
+import { assertSameCustomerAsFleet } from '../domain/ownership.js';
 import { normalizePlate } from '../domain/plate.js';
 
 export interface CreateVehicleInput {
@@ -47,26 +53,32 @@ export class CreateVehicleUseCase {
     if (!customer) {
       throw Errors.customerNotFound();
     }
-    if (input.fleetId) {
-      const fleet = await this.prisma.fleet.findFirst({
-        where: { id: input.fleetId, businessId: input.businessId },
-      });
-      if (!fleet) {
-        throw Errors.fleetNotFound();
-      }
-      if (fleet.customerId !== input.customerId) {
-        throw Errors.fleetVehicleMismatch();
-      }
-    }
 
     try {
       return await this.prisma.$transaction(async (tx) => {
+        let fleetId: string | null = null;
+        if (input.fleetId) {
+          await tx.$queryRaw`
+            SELECT id FROM fleets
+            WHERE id = ${input.fleetId}::uuid AND business_id = ${input.businessId}::uuid
+            FOR UPDATE
+          `;
+          const fleet = await tx.fleet.findFirst({
+            where: { id: input.fleetId, businessId: input.businessId },
+          });
+          if (!fleet) {
+            throw Errors.fleetNotFound();
+          }
+          assertSameCustomerAsFleet(input.customerId, fleet.customerId);
+          fleetId = fleet.id;
+        }
+
         const vehicle = await tx.vehicle.create({
           data: {
             id: randomUUID(),
             businessId: input.businessId,
             customerId: input.customerId,
-            fleetId: input.fleetId || null,
+            fleetId,
             plate,
             vin: trimOrNull(input.vin),
             brand: input.brand.trim(),
@@ -94,12 +106,12 @@ export class CreateVehicleUseCase {
             recordedBy: input.actorId,
           },
         });
-        if (input.fleetId) {
+        if (fleetId) {
           await tx.fleetVehicle.create({
             data: {
               id: randomUUID(),
               businessId: input.businessId,
-              fleetId: input.fleetId,
+              fleetId,
               vehicleId: vehicle.id,
             },
           });
