@@ -1,10 +1,10 @@
 /**
  * Entrypoint HTTP KONTI para Vercel (preset Express: `src/app.ts`) y local.
  *
- * El preset NestJS captura NestFactory/listen y no enruta un Express temprano:
- * los fallos de init terminan en INTERNAL_FUNCTION_INVOCATION_FAILED sin body.
- * Con `export default expressApp` Vercel enruta de inmediato; Nest se monta
- * encima y /health puede devolver `starting` o `bootstrap_failed`.
+ * Fluid Compute congela trabajo en background al terminar la request. Si Nest
+ * monta con `void` y /health responde `starting` al instante, Prisma `$connect`
+ * queda suspendido y acaba en timeout falso. Por eso cada request **await** el
+ * mount: el isolate sigue vivo mientras arranca Nest + DB.
  */
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
@@ -14,7 +14,7 @@ import express from 'express';
 import { AppLogger } from './shared/logging/app-logger.js';
 
 const BOOTSTRAP = 'Bootstrap';
-const CREATE_TIMEOUT_MS = 45_000;
+const CREATE_TIMEOUT_MS = 55_000;
 
 type BootstrapPayload = {
   status: 'bootstrap_failed' | 'starting';
@@ -115,28 +115,11 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 const expressApp = express();
 let nestReady = false;
 let bootError: BootstrapPayload | null = null;
+let mountPromise: Promise<void> | null = null;
 
 // Parsers propios: Nest 12 + Express 5 rompe en `app.router` al registrar los suyos.
 expressApp.use(express.json());
 expressApp.use(express.urlencoded({ extended: true }));
-
-expressApp.use((req, res, next) => {
-  if (bootError) {
-    res.status(503).type('json').send(JSON.stringify(bootError));
-    return;
-  }
-  if (!nestReady) {
-    if (req.path === '/' || req.path.endsWith('/health')) {
-      const starting: BootstrapPayload = {
-        status: 'starting',
-        env: describeStartupEnv(),
-      };
-      res.status(503).type('json').send(JSON.stringify(starting));
-      return;
-    }
-  }
-  next();
-});
 
 async function mountNest(): Promise<void> {
   bootLog('info', 'bootstrap:start', describeStartupEnv());
@@ -184,6 +167,34 @@ async function mountNest(): Promise<void> {
   }
 }
 
+function ensureNestMounted(): Promise<void> {
+  if (!mountPromise) {
+    mountPromise = mountNest();
+  }
+  return mountPromise;
+}
+
+expressApp.use((req, res, next) => {
+  void (async () => {
+    if (bootError) {
+      res.status(503).type('json').send(JSON.stringify(bootError));
+      return;
+    }
+    if (!nestReady) {
+      bootLog('info', 'bootstrap:await_mount', { path: req.path });
+      await ensureNestMounted();
+      if (bootError) {
+        res.status(503).type('json').send(JSON.stringify(bootError));
+        return;
+      }
+    }
+    next();
+  })().catch((err: unknown) => {
+    bootError = toFailedPayload(err);
+    res.status(503).type('json').send(JSON.stringify(bootError));
+  });
+});
+
 process.on('uncaughtException', (err) => {
   bootError = toFailedPayload(err);
   bootLog('error', 'bootstrap:uncaughtException', bootError as unknown as Record<string, unknown>);
@@ -194,11 +205,10 @@ process.on('unhandledRejection', (reason) => {
   bootLog('error', 'bootstrap:unhandledRejection', bootError as unknown as Record<string, unknown>);
 });
 
-void mountNest();
-
-// Local: listen explícito. En Vercel el preset Express usa el export.
+// Local: listen + montar ya. En Vercel el mount ocurre en la 1ª request (Fluid-safe).
 if (!process.env.VERCEL) {
   const port = Number(process.env.PORT ?? 3000);
+  void ensureNestMounted();
   expressApp.listen(port, () => {
     bootLog('info', 'bootstrap:local_listen', { port });
   });

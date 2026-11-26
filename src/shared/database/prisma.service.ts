@@ -8,8 +8,8 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 
-/** db.prisma.io ya tarda ~7s en local; en Vercel cold start necesita más margen. */
-const CONNECT_TIMEOUT_MS = 20_000;
+/** Local ~7s; en Vercel con la request viva puede necesitar más margen. */
+const CONNECT_TIMEOUT_MS = 40_000;
 
 /**
  * En Vercel/serverless: preferir pooled (`DATABASE_URL_POOLED` → pooled.db.prisma.io).
@@ -27,7 +27,7 @@ function resolveDatabaseUrl(): string | undefined {
 
   const extras: string[] = [];
   if (!/[?&]connect_timeout=/.test(raw)) {
-    extras.push('connect_timeout=20');
+    extras.push('connect_timeout=40');
   }
   if (process.env.VERCEL && !/[?&]connection_limit=/.test(raw)) {
     extras.push('connection_limit=1');
