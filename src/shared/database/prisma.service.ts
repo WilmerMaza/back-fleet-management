@@ -11,8 +11,16 @@ import { PrismaClient } from '@prisma/client';
 /** db.prisma.io ya tarda ~7s en local; en Vercel cold start necesita más margen. */
 const CONNECT_TIMEOUT_MS = 20_000;
 
+/**
+ * En Vercel/serverless: preferir pooled (`DATABASE_URL_POOLED` → pooled.db.prisma.io).
+ * El host directo `db.prisma.io` suele colgar o agotar conexiones bajo Fluid Compute.
+ * Docs: https://www.prisma.io/docs/guides/postgres/vercel
+ */
 function resolveDatabaseUrl(): string | undefined {
-  const raw = process.env.DATABASE_URL?.trim();
+  const raw =
+    process.env.DATABASE_URL_POOLED?.trim() ||
+    process.env.DATABASE_URL?.trim() ||
+    undefined;
   if (!raw) {
     return undefined;
   }
@@ -63,6 +71,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         timestamp: new Date().toISOString(),
         context: 'PrismaService',
         databaseHost: databaseHost(url),
+        pooledEnvSet: Boolean(process.env.DATABASE_URL_POOLED?.trim()),
         vercel: Boolean(process.env.VERCEL),
       }),
     );

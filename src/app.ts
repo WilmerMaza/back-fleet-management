@@ -58,6 +58,16 @@ function describeStartupEnv(): Record<string, unknown> {
   const emailProvider = (process.env.EMAIL_PROVIDER?.trim() || 'dev').toLowerCase();
   const resendKey = process.env.RESEND_API_KEY?.trim() ?? '';
 
+  const pooledUrl = process.env.DATABASE_URL_POOLED?.trim() ?? '';
+  let pooledHost: string | undefined;
+  try {
+    if (pooledUrl) {
+      pooledHost = new URL(pooledUrl.replace(/^postgres(ql)?:/i, 'http:')).host;
+    }
+  } catch {
+    pooledHost = '(url-inválida)';
+  }
+
   return {
     nodeEnv: process.env.NODE_ENV ?? '(unset)',
     vercel: Boolean(process.env.VERCEL),
@@ -68,6 +78,8 @@ function describeStartupEnv(): Record<string, unknown> {
     jwtSecretLength: jwtSecret.length,
     databaseUrlSet: databaseUrl.length > 0,
     databaseHost: databaseHost ?? '(none)',
+    databaseUrlPooledSet: pooledUrl.length > 0,
+    databasePooledHost: pooledHost ?? '(none)',
   };
 }
 
