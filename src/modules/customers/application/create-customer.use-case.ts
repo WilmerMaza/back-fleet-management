@@ -25,6 +25,9 @@ export interface CreateCustomerInput {
   phone?: string | null;
   email?: string | null;
   address?: string | null;
+  verificationDigit?: string | null;
+  municipality?: string | null;
+  department?: string | null;
 }
 
 @Injectable()
@@ -60,6 +63,9 @@ export class CreateCustomerUseCase {
             phone: trimOrNull(input.phone),
             email: trimOrNull(input.email),
             address: trimOrNull(input.address),
+            verificationDigit: trimOrNull(input.verificationDigit),
+            municipality: trimOrNull(input.municipality),
+            department: trimOrNull(input.department),
             createdBy: input.actorId,
             updatedBy: input.actorId,
           },

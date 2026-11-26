@@ -19,7 +19,13 @@ Punto de entrada para agentes e ingenieros. **Leer esto primero**; no cargar tod
 7. Contrato del módulo que tocas (tabla abajo).
 8. [`domain-model.md`](./domain-model.md) si cambia el modelo.
 
+Visión de producto / líneas de negocio (estratégico, no backlog): [`estrategia/`](./estrategia/README.md).
+
 Auditorías (consulta, no estándar operativo): [`audits/backend-architecture-global-audit.md`](./audits/backend-architecture-global-audit.md) · [`audits/architecture-rules-audit.md`](./audits/architecture-rules-audit.md) · auth [`audits/auth-hardening-fixes.md`](./audits/auth-hardening-fixes.md) · tenant FK [`audits/tenant-referential-integrity-audit.md`](./audits/tenant-referential-integrity-audit.md).
+
+Auth multiempresa (en curso): [`architecture/AUTHENTICATION_AUDIT.md`](./architecture/AUTHENTICATION_AUDIT.md) · [`authentication/DECISIONS.md`](./authentication/DECISIONS.md) · [`authentication/PENDING.md`](./authentication/PENDING.md) · [`authentication/google-authentication.md`](./authentication/google-authentication.md) · [`architecture/multi-tenant-authorization.md`](./architecture/multi-tenant-authorization.md).
+
+Correo transaccional: [`architecture/EMAIL_INFRASTRUCTURE_AUDIT.md`](./architecture/EMAIL_INFRASTRUCTURE_AUDIT.md) · [`architecture/EMAIL_NOTIFICATIONS.md`](./architecture/EMAIL_NOTIFICATIONS.md).
 
 ## Mapa rápido: contrato ↔ código
 
@@ -32,12 +38,13 @@ Auditorías (consulta, no estándar operativo): [`audits/backend-architecture-gl
 | Flotas | [04-fleets](./api-contracts/04-fleets.md) | `fleets/` | Listo |
 | Productos / inventario | [09-inventory](./api-contracts/09-inventory.md), [PRODUCTS_INVENTORY_SPEC](./PRODUCTS_INVENTORY_SPEC.md) | `products/`, `inventory/` | Listo |
 | Auditoría | [07-audit](./api-contracts/07-audit.md) | `audit/` | Writer listo |
-| Catálogo servicios | [05-service-catalog](./api-contracts/05-service-catalog.md) | — | Pendiente |
-| Órdenes + complete | [06-service-orders](./api-contracts/06-service-orders.md) | — | Pendiente (núcleo) |
+| Catálogo servicios | [05-service-catalog](./api-contracts/05-service-catalog.md) | `service-catalog/` | Listo (greenfield) |
+| Órdenes + complete | [06-service-orders](./api-contracts/06-service-orders.md) · diseño [architecture/service-orders-module-design.md](./architecture/service-orders-module-design.md) | — | Pendiente (diseño listo; sin código) |
 | Evidencias | [08-attachments](./api-contracts/08-attachments.md) | — | Pendiente |
 | Mantenimiento | [11-maintenance](./api-contracts/11-maintenance.md) | — | Pendiente |
 | Sugerencias | [16-service-suggestions](./api-contracts/16-service-suggestions.md) | — | Mock en front |
 | Ventas | [17-sales](./api-contracts/17-sales.md) | — | Mock en front |
+| Documentos comerciales | [19-commercial-documents](./api-contracts/19-commercial-documents.md) · diseño [arquitectura-comercial/12](./arquitectura-comercial/12-lote-5a-modelo-comercial.md) | — | Propuesto (Lote 5A; sin Prisma) |
 | Health | — | `health/` | Listo |
 
 Índice completo de contratos: [`api-contracts/README.md`](./api-contracts/README.md).
@@ -55,6 +62,7 @@ docs/
 ├── domain-model.md
 ├── PRODUCTS_INVENTORY_SPEC.md
 ├── plataforma_gestion_trazabilidad_vehicular.md
+├── estrategia/              ← visión y líneas de negocio (no autoriza implementación)
 ├── audits/                  ← auditorías (diagnóstico; no sustituyen el estándar)
 ├── api-contracts/           ← fuente de verdad HTTP
 ├── arquitectura-comercial/  ← propuesta (no contrato vigente)
@@ -94,7 +102,7 @@ Reglas de agentes: **`.cursor/rules/`** (canónico). `cursor/rules/` está depre
 
 ## Comercial (propuesta)
 
-[`arquitectura-comercial/README.md`](./arquitectura-comercial/README.md) — no sustituye contratos hasta aprobación.
+[`arquitectura-comercial/README.md`](./arquitectura-comercial/README.md) — no sustituye contratos hasta aprobación. Lote 5A: [`12-lote-5a-modelo-comercial.md`](./arquitectura-comercial/12-lote-5a-modelo-comercial.md) · [`ADR-001`](./arquitectura-comercial/ADR-001-sale-vs-commercial-document.md).
 
 ## Cómo validar en local
 

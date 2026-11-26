@@ -22,6 +22,9 @@ export interface UpdateCustomerInput {
   phone?: string | null;
   email?: string | null;
   address?: string | null;
+  verificationDigit?: string | null;
+  municipality?: string | null;
+  department?: string | null;
 }
 
 @Injectable()
@@ -68,6 +71,9 @@ export class UpdateCustomerUseCase {
             phone: maybe(input.phone),
             email: maybe(input.email),
             address: maybe(input.address),
+            verificationDigit: maybe(input.verificationDigit),
+            municipality: maybe(input.municipality),
+            department: maybe(input.department),
             updatedBy: actorId,
           },
         });

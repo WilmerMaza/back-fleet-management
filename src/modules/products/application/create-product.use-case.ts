@@ -6,6 +6,7 @@ import { AuditService } from '../../audit/audit.service.js';
 import { Errors } from '../../../shared/common/app-error.js';
 import { assertMoney, assertQuantity, qty } from '../../../shared/common/decimal.js';
 import { InventoryStockService } from '../../inventory/application/inventory-stock.service.js';
+import { ResolveProductClassification } from '../../product-catalog/application/resolve-product-classification.js';
 import { normalizeSku } from '../domain/sku.js';
 
 export interface CreateProductInput {
@@ -16,6 +17,7 @@ export interface CreateProductInput {
   description?: string;
   unit: string;
   categoryId?: string | null;
+  brandId?: string | null;
   initialStock?: string;
   minStock?: string;
   salePrice?: string | null;
@@ -27,6 +29,7 @@ export class CreateProductUseCase {
     private readonly prisma: PrismaService,
     private readonly stock: InventoryStockService,
     private readonly audit: AuditService,
+    private readonly classification: ResolveProductClassification,
   ) {}
 
   async execute(input: CreateProductInput) {
@@ -41,6 +44,18 @@ export class CreateProductUseCase {
         ? null
         : assertMoney(qty(input.salePrice));
 
+    const requireCategory = await this.classification.businessHasActiveCategories(
+      input.businessId,
+    );
+    const { categoryId, brandId } = await this.classification.assertAssignable(
+      input.businessId,
+      {
+        categoryId: input.categoryId,
+        brandId: input.brandId,
+        requireCategory,
+      },
+    );
+
     try {
       return await this.prisma.$transaction(async (tx) => {
         const product = await tx.product.create({
@@ -51,7 +66,8 @@ export class CreateProductUseCase {
             name: input.name.trim(),
             description: input.description?.trim() || null,
             unit: input.unit.trim(),
-            categoryId: input.categoryId || null,
+            categoryId,
+            brandId,
             stock: new Prisma.Decimal('0'),
             minStock: new Prisma.Decimal(minStock.toFixed(3)),
             salePrice: salePrice ? new Prisma.Decimal(salePrice.toFixed(2)) : null,
@@ -90,7 +106,10 @@ export class CreateProductUseCase {
           );
         }
 
-        return tx.product.findUniqueOrThrow({ where: { id: product.id } });
+        return tx.product.findUniqueOrThrow({
+          where: { id: product.id },
+          include: { category: { include: { parent: true } }, brand: true },
+        });
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {

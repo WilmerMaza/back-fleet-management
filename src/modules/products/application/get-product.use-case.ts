@@ -9,6 +9,7 @@ export class GetProductUseCase {
   async execute(businessId: string, id: string) {
     const product = await this.prisma.product.findFirst({
       where: { id, businessId },
+      include: { category: { include: { parent: true } }, brand: true },
     });
     if (!product) {
       throw Errors.productNotFound();

@@ -1,11 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, Product, ProductStatus } from '@prisma/client';
+import { Prisma, ProductStatus } from '@prisma/client';
 import { PrismaService } from '../../../shared/database/prisma.service.js';
 
 export interface ListProductsQuery {
   search?: string;
   status?: ProductStatus;
   lowStock?: boolean | string;
+  categoryId?: string;
+  brandId?: string;
   page?: number;
   pageSize?: number;
 }
@@ -20,21 +22,38 @@ export class ListProductsUseCase {
     const lowStock = query.lowStock === true || query.lowStock === 'true';
     const search = query.search?.trim();
 
-    const where: Prisma.ProductWhereInput = { businessId };
+    const and: Prisma.ProductWhereInput[] = [{ businessId }];
     if (query.status) {
-      where.status = query.status;
+      and.push({ status: query.status });
+    }
+    if (query.brandId) {
+      and.push({ brandId: query.brandId });
+    }
+    if (query.categoryId) {
+      and.push({
+        OR: [{ categoryId: query.categoryId }, { category: { parentId: query.categoryId } }],
+      });
     }
     if (search) {
-      where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { sku: { contains: search.toUpperCase(), mode: 'insensitive' } },
-      ];
+      and.push({
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { sku: { contains: search.toUpperCase(), mode: 'insensitive' } },
+        ],
+      });
     }
+
+    const where: Prisma.ProductWhereInput = { AND: and };
+    const include = {
+      category: { include: { parent: true } },
+      brand: true,
+    } as const;
 
     if (!lowStock) {
       const [items, total] = await Promise.all([
         this.prisma.product.findMany({
           where,
+          include,
           orderBy: { name: 'asc' },
           skip: (page - 1) * pageSize,
           take: pageSize,
@@ -44,30 +63,18 @@ export class ListProductsUseCase {
       return { items, total, page, pageSize };
     }
 
-    const statusFilter = query.status
-      ? Prisma.sql`AND status = ${query.status}::"ProductStatus"`
-      : Prisma.empty;
-    const searchFilter = search
-      ? Prisma.sql`AND (name ILIKE ${'%' + search + '%'} OR sku ILIKE ${'%' + search.toUpperCase() + '%'})`
-      : Prisma.empty;
-
-    const items = await this.prisma.$queryRaw<Product[]>`
-      SELECT * FROM products
-      WHERE business_id = ${businessId}::uuid
-        AND stock <= min_stock
-        ${statusFilter}
-        ${searchFilter}
-      ORDER BY name ASC
-      OFFSET ${(page - 1) * pageSize}
-      LIMIT ${pageSize}
-    `;
-    const counted = await this.prisma.$queryRaw<Array<{ count: bigint }>>`
-      SELECT COUNT(*)::bigint AS count FROM products
-      WHERE business_id = ${businessId}::uuid
-        AND stock <= min_stock
-        ${statusFilter}
-        ${searchFilter}
-    `;
-    return { items, total: Number(counted[0]?.count ?? 0), page, pageSize };
+    const all = await this.prisma.product.findMany({
+      where,
+      include,
+      orderBy: { name: 'asc' },
+    });
+    const filtered = all.filter((p) => p.stock.lte(p.minStock));
+    const start = (page - 1) * pageSize;
+    return {
+      items: filtered.slice(start, start + pageSize),
+      total: filtered.length,
+      page,
+      pageSize,
+    };
   }
 }

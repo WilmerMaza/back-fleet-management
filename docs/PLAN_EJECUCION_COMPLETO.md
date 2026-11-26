@@ -1,19 +1,20 @@
 # Plan de ejecución completo — Plataforma de Gestión y Trazabilidad Vehicular
 
-Documento de ejecución técnica y funcional para completar **todo el sistema**.
+Documento de ejecución técnica y funcional para completar **el vertical operativo actual** (taller / flota / trazabilidad vehicular) dentro de **KONTI Gestión**.
 
-- **Producto:** Fleet Management
+- **Producto:** KONTI (marca) · vertical: Gestión y trazabilidad vehicular
 - **Repo frontend:** `/home/renlt367/wilmer/fleet-management`
-- **Fuente funcional:** `plataforma_gestion_trazabilidad_vehicular.md`
+- **Visión estratégica / líneas de negocio:** [`docs/estrategia/`](./estrategia/README.md) ← **no sustituye este plan; lo contextualiza**
+- **Fuente funcional (vertical):** `plataforma_gestion_trazabilidad_vehicular.md`
 - **Contratos API por dominio:** `docs/api-contracts/`
 - **Modelo de dominio:** `docs/domain-model.md`
-- **Enfoque actual:** frontend Angular con mocks; backend por implementar según este plan
+- **Enfoque actual:** frontend Angular con mocks; API Nest en repo hermano según este plan
 
 ---
 
 ## 0. Cómo usar este documento
 
-Este archivo es la **guía de ejecución** para llegar de cero a plataforma completa.
+Este archivo es la **guía de ejecución** del vertical vehicular/taller hasta plataforma operativa completa en ese dominio.
 
 Para cada fase encontrarás:
 
@@ -28,9 +29,23 @@ Para cada fase encontrarás:
 
 **Orden obligatorio:** no saltar fases del núcleo (0–11) antes de estabilizar MVP 1.
 
+**Líneas de negocio futuras** (Comercio, Conecta, Inteligencia) viven en [`docs/estrategia/`](./estrategia/README.md). Contemplarlas **no** autoriza abrir fases fuera de este plan sin evaluación y aprobación explícitas.
+
 ---
 
 ## 1. Visión (no negociable)
+
+### 1.1 Ecosistema KONTI (contexto)
+
+KONTI es una plataforma SaaS multiempresa con el principio:
+
+> **Una empresa, una fuente de verdad, un inventario y múltiples canales de operación y comercialización.**
+
+Detalle de líneas (Gestión, Comercio, Conecta, Inteligencia), modelo comercial y principios globales: [`docs/estrategia/01-vision-y-lineas-de-negocio.md`](./estrategia/01-vision-y-lineas-de-negocio.md).
+
+Este plan ejecuta el **primer vertical de profundidad** de **KONTI Gestión**.
+
+### 1.2 Vertical vehicular (alcance de este documento)
 
 No construir un sistema exclusivo de cambios de aceite.
 
@@ -52,7 +67,7 @@ El cambio de aceite es el **primer caso de uso**, no el núcleo de datos.
 Cliente → Vehículo/Flota → Orden/Servicio → Evidencias → Historial → Alertas
 ```
 
-### Principios de arquitectura
+### Principios de arquitectura (vertical + plataforma)
 
 | #   | Principio                     | Implicación                                  |
 | --- | ----------------------------- | -------------------------------------------- |
@@ -63,6 +78,8 @@ Cliente → Vehículo/Flota → Orden/Servicio → Evidencias → Historial → 
 | 5   | Mantenimiento por reglas      | km / tiempo / lo que ocurra primero / custom |
 | 6   | Auditoría                     | Quién hizo qué, cuándo                       |
 | 7   | Crecimiento sin romper núcleo | SOAT/llantas/baterías reutilizan componentes |
+| 8   | Fuente única de verdad        | Un inventario/catálogo compartido entre canales futuros |
+| 9   | Sin microservicios prematuros | Escalabilidad progresiva; APIs entre módulos |
 
 ---
 
@@ -1072,7 +1089,7 @@ Registrar al menos:
 ### Prioridad recomendada
 
 **A — Cerrar MVP 1 FE (opcional, paralelo):** catálogo edit/activar, ficha vehículo, selector técnico, marcar DONE.  
-**Plan de tecnología, patrones y arquitectura del API:** [`docs/PLAN.md`](./PLAN.md).
+**Plan de tecnología, patrones y arquitectura del API:** [`docs/backend/PLAN.md`](./backend/PLAN.md).
 
 **B — Arrancar backend (crítico):**
 
@@ -1100,7 +1117,7 @@ Empezar pequeño (cambio de aceite) y crecer hasta plataforma integral **sin ree
 
 ## 12. Índice de contratos backend
 
-Stack y arquitectura del API: `docs/PLAN.md`.
+Stack y arquitectura del API: `docs/backend/PLAN.md`.
 
 | Fase  | Documento                                  |
 | ----- | ------------------------------------------ |

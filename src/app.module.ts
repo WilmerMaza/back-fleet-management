@@ -9,6 +9,12 @@ import { InventoryModule } from './modules/inventory/inventory.module.js';
 import { CustomersModule } from './modules/customers/customers.module.js';
 import { FleetsModule } from './modules/fleets/fleets.module.js';
 import { ProductsModule } from './modules/products/products.module.js';
+import { ProductCatalogModule } from './modules/product-catalog/product-catalog.module.js';
+import { NotificationsModule } from './modules/notifications/notifications.module.js';
+import { PlatformModule } from './modules/platform/platform.module.js';
+import { RolesModule } from './modules/roles/roles.module.js';
+import { ServiceCatalogModule } from './modules/service-catalog/service-catalog.module.js';
+import { ServiceOrdersModule } from './modules/service-orders/service-orders.module.js';
 import { VehiclesModule } from './modules/vehicles/vehicles.module.js';
 import { PrismaModule } from './shared/database/prisma.module.js';
 import { HttpExceptionFilter } from './shared/errors/http-exception.filter.js';
@@ -32,11 +38,17 @@ import { loadJwtModuleOptions } from './shared/config/jwt.config.js';
     PrismaModule,
     AuditModule,
     IdentityModule,
+    RolesModule,
+    NotificationsModule,
+    PlatformModule,
+    ProductCatalogModule,
     ProductsModule,
     InventoryModule,
     CustomersModule,
     VehiclesModule,
     FleetsModule,
+    ServiceCatalogModule,
+    ServiceOrdersModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_FILTER, useClass: HttpExceptionFilter }],

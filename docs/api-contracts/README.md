@@ -1,6 +1,6 @@
 # API contracts — índice
 
-Cómo construir el API (stack, capas, tenancy, orden de cortes): [`docs/PLAN.md`](../PLAN.md). Índice IA: [`docs/INDEX.md`](../INDEX.md).
+Cómo construir el API (stack, capas, tenancy, orden de cortes): [`docs/backend/PLAN.md`](../backend/PLAN.md).
 
 Base URL: `/api/v1`
 
@@ -27,6 +27,7 @@ Content-Type: application/json
 | [06-service-orders.md](./06-service-orders.md)           | Órdenes + completar con efectos                                       |
 | [16-service-suggestions.md](./16-service-suggestions.md) | Sugerencias por servicio y ejecución de líneas (mock; HTTP pendiente) |
 | [17-sales.md](./17-sales.md)                             | Ventas directas, pagos e inventario (mock; HTTP pendiente)            |
+| [19-commercial-documents.md](./19-commercial-documents.md) | Documentos comerciales internos (**propuesto** Lote 5A; no HTTP)    |
 | [07-audit.md](./07-audit.md)                             | `audit_logs`, actores de orden y evidencias                           |
 | [08-attachments.md](./08-attachments.md)                 | Evidencias / storage                                                  |
 | [09-inventory.md](./09-inventory.md)                     | Productos y movimientos                                               |
@@ -45,4 +46,4 @@ Content-Type: application/json
 
 ## Evolución comercial (no es contrato vigente)
 
-La auditoría de precios, inventario, ventas, órdenes, autorizaciones y documentos de cobro está en [`docs/arquitectura-comercial/`](../arquitectura-comercial/README.md). Los endpoints propuestos allí no sustituyen los archivos de esta carpeta hasta que se aprueben e implementen. `15-documents.md` sigue siendo documentos del vehículo, no facturas.
+La auditoría de precios, inventario, ventas, órdenes, autorizaciones y documentos de cobro está en [`docs/arquitectura-comercial/`](../arquitectura-comercial/README.md). El Lote 5A ([12](../arquitectura-comercial/12-lote-5a-modelo-comercial.md) + [19](./19-commercial-documents.md)) propone el documento comercial sin migraciones aún. Los endpoints propuestos no sustituyen los contratos vigentes hasta implementarse. `15-documents.md` sigue siendo documentos del vehículo, no facturas.

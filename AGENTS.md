@@ -4,17 +4,20 @@ Contexto operativo para agentes de IA en este repositorio NestJS.
 
 ## Qué es
 
-API de **Gestión y Trazabilidad Vehicular** (KONTI). Multi-tenant: tenant = `Business`. `Customer` = cliente del taller. Servicios genéricos; **prohibido** `oil_changes`.
+API de **KONTI Gestión** (vertical de gestión y trazabilidad vehicular). Multi-tenant: tenant = `Business`. `Customer` = cliente del taller. Servicios genéricos; **prohibido** `oil_changes`.
 
-Frontend hermano: [`fleet-management`](https://github.com/WilmerMaza/fleet-management) (Angular + mocks). Contratos HTTP: `docs/api-contracts/`.
+Frontend hermano: [`fleet-management`](https://github.com/WilmerMaza/fleet-management) (Angular + mocks). Contratos HTTP: `docs/api-contracts/`. Visión de líneas de negocio: [`docs/estrategia/`](docs/estrategia/README.md) (contemplado ≠ implementar).
 
 ## Lectura obligatoria (orden)
 
 1. [`docs/INDEX.md`](docs/INDEX.md) — mapa contrato ↔ código.
 2. [`docs/architecture/backend-architecture-standard.md`](docs/architecture/backend-architecture-standard.md) — estándar greenfield / legado.
-3. Reglas Cursor: [`.cursor/rules/`](.cursor/rules/) (`backend-architecture.mdc`, `backend-development.mdc`).
+3. Reglas Cursor: [`.cursor/rules/`](.cursor/rules/) (`backend-architecture.mdc`, `backend-development.mdc`, `facturacion-electronica-prep.mdc`).
 4. Contrato del módulo en `docs/api-contracts/`.
 5. [`docs/PLAN.md`](docs/PLAN.md) si cambia el plan de construcción.
+6. Preparación FE (sin DIAN): [`docs/arquitectura-comercial/11-preparacion-facturacion-electronica.md`](docs/arquitectura-comercial/11-preparacion-facturacion-electronica.md).
+7. Modelo comercial (Lote 5A, diseño): [`docs/arquitectura-comercial/12-lote-5a-modelo-comercial.md`](docs/arquitectura-comercial/12-lote-5a-modelo-comercial.md) · [`ADR-001`](docs/arquitectura-comercial/ADR-001-sale-vs-commercial-document.md) · contrato propuesto [`19-commercial-documents`](docs/api-contracts/19-commercial-documents.md).
+8. (Opcional, estratégico) [`docs/estrategia/`](docs/estrategia/README.md) — no abre módulos sin aprobación.
 
 No explorar todo el repo a ciegas. No reescribir módulos legado por uniformidad.
 
@@ -29,6 +32,7 @@ No explorar todo el repo a ciegas. No reescribir módulos legado por uniformidad
 | --- | --- |
 | `backend-architecture.mdc` | Capas, legado vs greenfield, TX, tenancy, stock, proporcionalidad |
 | `backend-development.mdc` | Stack, TS, HTTP, tests, logging |
+| `facturacion-electronica-prep.mdc` | Restricciones doc 11: `salePrice`, sin IVA inventado, sin motor FE |
 
 Narrativa larga y ejemplos → `docs/architecture/backend-architecture-standard.md` (no duplicar aquí).
 
@@ -62,9 +66,12 @@ Shared: `tenant`, `authorization`, `database`, `logging`, `errors`, `common`.
 
 | Usuario | Password | Negocio |
 | --- | --- | --- |
-| `admin@fleet.local` | `demo123` | Taller Demo Fleet |
+| `wilmermaza10@gmail.com` | `demo123` | Plataforma (`SUPER_ADMIN`) + Taller KONTI |
+| `admin@fleet.local` | `demo123` | Taller KONTI |
 | `admin@norte.local` | `demo123` | Lubricantes del Norte |
 | `operador@fleet.local` | `demo123` | ambos |
+
+Auth / Google / backlog: [`docs/authentication/`](docs/authentication/).
 
 ## Validar
 

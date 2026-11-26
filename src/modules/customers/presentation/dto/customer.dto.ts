@@ -64,6 +64,21 @@ export class CreateCustomerDto {
   @IsString()
   @MaxLength(240)
   address?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2)
+  verificationDigit?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  municipality?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  department?: string | null;
 }
 
 export class UpdateCustomerDto {
@@ -127,6 +142,21 @@ export class UpdateCustomerDto {
   @IsString()
   @MaxLength(240)
   address?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(2)
+  verificationDigit?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  municipality?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  department?: string | null;
 }
 
 export class ListCustomersQueryDto {

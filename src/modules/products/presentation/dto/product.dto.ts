@@ -39,6 +39,10 @@ export class CreateProductDto {
   categoryId?: string;
 
   @IsOptional()
+  @IsUUID()
+  brandId?: string;
+
+  @IsOptional()
   @Matches(QTY)
   initialStock?: string;
 
@@ -73,8 +77,14 @@ export class UpdateProductDto {
   unit?: string;
 
   @IsOptional()
+  @ValidateIf((_, value) => value != null && value !== '')
   @IsUUID()
   categoryId?: string | null;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value != null && value !== '')
+  @IsUUID()
+  brandId?: string | null;
 
   @IsOptional()
   @Matches(QTY)
@@ -97,6 +107,14 @@ export class ListProductsQueryDto {
 
   @IsOptional()
   lowStock?: string;
+
+  @IsOptional()
+  @IsUUID()
+  categoryId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  brandId?: string;
 
   @IsOptional()
   @Transform(({ value }) => Number(value))

@@ -9,9 +9,11 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
+import cookieParser from 'cookie-parser';
 import { AppModule } from '../src/app.module.js';
 import { hashRefreshToken } from '../src/modules/identity/domain/token-hash.js';
 import { PrismaService } from '../src/shared/database/prisma.service.js';
+import { refreshTokenFromSetCookie } from './auth-cookie-helpers.js';
 
 let container: StartedPostgreSqlContainer;
 let app: INestApplication;
@@ -27,10 +29,13 @@ async function login(email: string, businessId?: string) {
   if (res.status !== 200 && res.status !== 201) {
     throw new Error(`login ${res.status} ${JSON.stringify(res.body)}`);
   }
-  return res.body as {
-    accessToken: string;
-    refreshToken: string;
-    user: { id: string; businessId: string; roleCodes: string[] };
+  expect(res.body.refreshToken).toBeUndefined();
+  expect(res.body.csrfToken).toBeTruthy();
+  return {
+    accessToken: res.body.accessToken as string,
+    refreshToken: refreshTokenFromSetCookie(res),
+    csrfToken: res.body.csrfToken as string,
+    user: res.body.user as { id: string; businessId: string; roleCodes: string[] },
   };
 }
 
@@ -54,6 +59,7 @@ describe('Auth sessions H-04 (Postgres)', () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('api/v1');
+    app.use(cookieParser());
     app.useGlobalPipes(
       new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
     );
@@ -90,7 +96,9 @@ describe('Auth sessions H-04 (Postgres)', () => {
       .send({ refreshToken: session.refreshToken })
       .expect(200);
 
-    expect(refreshed.body.refreshToken).not.toBe(session.refreshToken);
+    const nextRefresh = refreshTokenFromSetCookie(refreshed);
+    expect(nextRefresh).not.toBe(session.refreshToken);
+    expect(refreshed.body.refreshToken).toBeUndefined();
     expect(refreshed.body.user.businessId).toBe(DEMO);
 
     const old = await prisma.authRefreshSession.findUniqueOrThrow({
@@ -100,7 +108,7 @@ describe('Auth sessions H-04 (Postgres)', () => {
     expect(old.replacedById).toBeTruthy();
 
     const next = await prisma.authRefreshSession.findUniqueOrThrow({
-      where: { tokenHash: hashRefreshToken(refreshed.body.refreshToken) },
+      where: { tokenHash: hashRefreshToken(nextRefresh) },
     });
     expect(next.revokedAt).toBeNull();
     expect(next.familyId).toBe(old.familyId);
@@ -134,9 +142,10 @@ describe('Auth sessions H-04 (Postgres)', () => {
       .send({ refreshToken: original })
       .expect(401);
 
+    const rotatedRefresh = refreshTokenFromSetCookie(rotated);
     const familyId = (
       await prisma.authRefreshSession.findUniqueOrThrow({
-        where: { tokenHash: hashRefreshToken(rotated.body.refreshToken) },
+        where: { tokenHash: hashRefreshToken(rotatedRefresh) },
       })
     ).familyId;
 
@@ -147,7 +156,7 @@ describe('Auth sessions H-04 (Postgres)', () => {
 
     await request(app.getHttpServer())
       .post('/api/v1/auth/refresh')
-      .send({ refreshToken: rotated.body.refreshToken })
+      .send({ refreshToken: rotatedRefresh })
       .expect(401);
   });
 
@@ -210,7 +219,7 @@ describe('Auth sessions H-04 (Postgres)', () => {
     if (ok.length === 1) {
       const winner = results.find(
         (item) => item.status === 'fulfilled' && item.value.status === 200,
-      ) as PromiseFulfilledResult<{ body: { refreshToken: string } }>;
+      ) as PromiseFulfilledResult<{ headers: Record<string, unknown> }>;
       // Reuso del original ya ocurrió en el perdedor → familia revocada.
       const familyActive = await prisma.authRefreshSession.count({
         where: { familyId: old.familyId, revokedAt: null },
@@ -218,7 +227,7 @@ describe('Auth sessions H-04 (Postgres)', () => {
       expect(familyActive).toBe(0);
       await request(app.getHttpServer())
         .post('/api/v1/auth/refresh')
-        .send({ refreshToken: winner.value.body.refreshToken })
+        .send({ refreshToken: refreshTokenFromSetCookie(winner.value) })
         .expect(401);
     }
   });
@@ -248,7 +257,8 @@ describe('Auth sessions H-04 (Postgres)', () => {
       .expect(200);
 
     expect(switched.body.user.businessId).toBe(NORTE);
-    expect(switched.body.refreshToken).toBeTruthy();
+    expect(switched.body.refreshToken).toBeUndefined();
+    const switchedRefresh = refreshTokenFromSetCookie(switched);
 
     await request(app.getHttpServer())
       .get(`/api/v1/businesses/${NORTE}/customers`)
@@ -262,8 +272,26 @@ describe('Auth sessions H-04 (Postgres)', () => {
 
     const refreshed = await request(app.getHttpServer())
       .post('/api/v1/auth/refresh')
-      .send({ refreshToken: switched.body.refreshToken })
+      .send({ refreshToken: switchedRefresh })
       .expect(200);
     expect(refreshed.body.user.businessId).toBe(NORTE);
+  });
+
+  it('refresh por cookie exige CSRF y rota la cookie', async () => {
+    const session = await login('admin@fleet.local');
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/refresh')
+      .set('Cookie', [`konti_refresh=${session.refreshToken}`, `XSRF-TOKEN=${session.csrfToken}`])
+      .expect(403);
+
+    const ok = await request(app.getHttpServer())
+      .post('/api/v1/auth/refresh')
+      .set('Cookie', [`konti_refresh=${session.refreshToken}`, `XSRF-TOKEN=${session.csrfToken}`])
+      .set('X-XSRF-TOKEN', session.csrfToken)
+      .expect(200);
+
+    expect(ok.body.refreshToken).toBeUndefined();
+    expect(ok.body.csrfToken).toBeTruthy();
+    expect(refreshTokenFromSetCookie(ok)).not.toBe(session.refreshToken);
   });
 });

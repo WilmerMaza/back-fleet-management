@@ -6,6 +6,9 @@
  * `X-Business-Id` y el `businessId` de ruta, si vienen, deben coincidir con
  * ese negocio activo; no basta con aparecer en `businessIds`.
  *
+ * SUPER_ADMIN puede operar sin tenant activo en rutas de plataforma
+ * (sin path `:businessId` ni header `X-Business-Id`).
+ *
  * SEC-02/SEC-03: tras verificar la firma se revalida la familia de refresh y
  * se recalculan permisos desde la membresía ACTIVE (no se confía en claims stale).
  */
@@ -47,30 +50,35 @@ export class AuthGuard implements CanActivate {
       throw Errors.unauthorized();
     }
 
+    const isSuperAdmin = payload.platformRole === 'SUPER_ADMIN';
     const activeBusinessId = payload.activeBusinessId;
-    if (
-      !activeBusinessId ||
-      !Array.isArray(payload.businessIds) ||
-      !payload.businessIds.includes(activeBusinessId)
-    ) {
-      throw Errors.tenantDenied();
-    }
-
     const headerBusiness = readHeader(request.headers['x-business-id']);
     const pathBusiness = request.params.businessId;
 
-    if (headerBusiness && headerBusiness !== activeBusinessId) {
-      throw Errors.tenantDenied();
-    }
-    if (pathBusiness && pathBusiness !== activeBusinessId) {
-      throw Errors.tenantDenied();
+    if (activeBusinessId) {
+      if (!Array.isArray(payload.businessIds) || !payload.businessIds.includes(activeBusinessId)) {
+        throw Errors.tenantDenied();
+      }
+      if (headerBusiness && headerBusiness !== activeBusinessId) {
+        throw Errors.tenantDenied();
+      }
+      if (pathBusiness && pathBusiness !== activeBusinessId) {
+        throw Errors.tenantDenied();
+      }
+    } else {
+      if (!isSuperAdmin) {
+        throw Errors.tenantDenied();
+      }
+      if (headerBusiness || pathBusiness) {
+        throw Errors.tenantDenied();
+      }
     }
 
     const ctx = await this.sessions.resolveContext(payload);
     if (ctx.businessId !== activeBusinessId) {
       throw Errors.tenantDenied();
     }
-    request[REQUEST_CONTEXT] = ctx;
+    request[REQUEST_CONTEXT] = { ...ctx, sessionFamilyId: payload.familyId };
 
     const needed = this.reflector.getAllAndOverride<string | undefined>(PERMISSION_KEY, [
       context.getHandler(),

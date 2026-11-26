@@ -1,6 +1,8 @@
 # Plataforma de Gestión y Trazabilidad Vehicular
 
-## Documento maestro de producto y roadmap
+## Documento maestro de producto y roadmap (vertical taller / flota)
+
+> **Contexto de ecosistema:** este documento describe el vertical de trazabilidad vehicular dentro de **KONTI Gestión**. La visión SaaS multiempresa, líneas de negocio (Gestión, Comercio, Conecta, Inteligencia) y modelo comercial están en [`docs/estrategia/`](./estrategia/README.md).
 
 ---
 
@@ -2053,6 +2055,8 @@ vehicle
 ---
 
 # 44. Estrategia de crecimiento del producto
+
+Además de las capas del vertical vehicular, el crecimiento comercial de la marca KONTI (presencia web, e-commerce, integraciones, analítica avanzada) se define en [`docs/estrategia/01-vision-y-lineas-de-negocio.md`](./estrategia/01-vision-y-lineas-de-negocio.md). Esas líneas **no** forman parte del orden de implementación de las secciones 46–48 hasta su evaluación y aprobación.
 
 La plataforma debe crecer en capas.
 

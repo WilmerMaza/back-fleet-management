@@ -4,6 +4,8 @@ Contrato del mock. No hay `HttpRepository`. No es una orden de servicio ni una f
 
 Una venta no tiene vehículo ni orden. Puede usar un cliente registrado o consumidor final. El precio, el nombre, el SKU y la moneda se copian al agregar la línea. Cambiar el catálogo o el cliente después no reescribe la venta.
 
+**Documento comercial:** la emisión interna consolidada (y la futura FE) no viven dentro de `Sale.billing`. Diseño Lote 5A: [`19-commercial-documents.md`](./19-commercial-documents.md) y [`arquitectura-comercial/12-lote-5a-modelo-comercial.md`](../arquitectura-comercial/12-lote-5a-modelo-comercial.md). Confirmar una venta **no** crea automáticamente el documento; se prepara en un paso explícito.
+
 ## Estados
 
 - Venta: `DRAFT`, `CONFIRMED`, `CANCELLED`. Un borrador se edita. Una confirmada no vuelve a borrador.

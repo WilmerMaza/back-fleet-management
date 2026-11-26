@@ -36,8 +36,9 @@ CORS por defecto: `http://localhost:4200`
 
 | Usuario | Password | Negocio |
 | --- | --- | --- |
-| `admin@fleet.local` | `demo123` | Taller Demo Fleet |
-| `inventario@fleet.local` | `demo123` | Taller Demo Fleet |
+| `wilmermaza10@gmail.com` | `demo123` | `SUPER_ADMIN` + Taller KONTI (vincular Google con `/auth/link/google`) |
+| `admin@fleet.local` | `demo123` | Taller KONTI |
+| `inventario@fleet.local` | `demo123` | Taller KONTI |
 | `admin@norte.local` | `demo123` | Lubricantes del Norte |
 | `operador@fleet.local` | `demo123` | ambos (enviar `businessId`) |
 

@@ -241,6 +241,135 @@ describe('Productos e inventario (Postgres)', () => {
       .expect(403);
   });
 
+  it('salida HTTP, ajuste sin motivo y recepción multi-línea atómica', async () => {
+    const admin = await login('admin@fleet.local');
+    const oil = await request(app.getHttpServer())
+      .post(`/api/v1/businesses/${DEMO}/products`)
+      .set(auth(admin.body.accessToken, DEMO))
+      .send({ sku: 'BUY-OIL', name: 'Aceite compra', unit: 'L', initialStock: '1' });
+    const filt = await request(app.getHttpServer())
+      .post(`/api/v1/businesses/${DEMO}/products`)
+      .set(auth(admin.body.accessToken, DEMO))
+      .send({ sku: 'BUY-FILT', name: 'Filtro compra', unit: 'UND', initialStock: '0' });
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/businesses/${DEMO}/inventory-exits`)
+      .set(auth(admin.body.accessToken, DEMO))
+      .send({ productId: oil.body.id, quantity: '1.000', reason: 'Merma' })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/businesses/${DEMO}/inventory-exits`)
+      .set(auth(admin.body.accessToken, DEMO))
+      .send({ productId: oil.body.id, quantity: '1.000', reason: 'Otra' })
+      .expect(409);
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/businesses/${DEMO}/inventory-adjustments`)
+      .set(auth(admin.body.accessToken, DEMO))
+      .send({ productId: oil.body.id, targetStock: '5.000' })
+      .expect(400);
+
+    const receipt = await request(app.getHttpServer())
+      .post(`/api/v1/businesses/${DEMO}/purchase-receipts`)
+      .set(auth(admin.body.accessToken, DEMO))
+      .send({
+        supplierName: 'Lubricantes SA',
+        documentRef: 'FC-100',
+        receivedAt: new Date().toISOString(),
+        operationKey: 'purchase:demo:fc-100',
+        lines: [
+          { productId: oil.body.id, quantity: '4.000', unit: 'L' },
+          { productId: filt.body.id, quantity: '2.000', unit: 'UND' },
+        ],
+      })
+      .expect(201);
+
+    expect(receipt.body.lines).toHaveLength(2);
+
+    const again = await request(app.getHttpServer())
+      .post(`/api/v1/businesses/${DEMO}/purchase-receipts`)
+      .set(auth(admin.body.accessToken, DEMO))
+      .send({
+        supplierName: 'Lubricantes SA',
+        documentRef: 'FC-100',
+        receivedAt: new Date().toISOString(),
+        operationKey: 'purchase:demo:fc-100',
+        lines: [
+          { productId: oil.body.id, quantity: '4.000', unit: 'L' },
+          { productId: filt.body.id, quantity: '2.000', unit: 'UND' },
+        ],
+      })
+      .expect(201);
+    expect(again.body.id).toBe(receipt.body.id);
+
+    const oilFresh = await prisma.product.findUniqueOrThrow({ where: { id: oil.body.id } });
+    const filtFresh = await prisma.product.findUniqueOrThrow({ where: { id: filt.body.id } });
+    expect(oilFresh.stock.toString()).toBe('4');
+    expect(filtFresh.stock.toString()).toBe('2');
+  });
+
+  it('consumeForServiceOrder es atómico e idempotente', async () => {
+    const admin = await login('admin@fleet.local');
+    const a = await request(app.getHttpServer())
+      .post(`/api/v1/businesses/${DEMO}/products`)
+      .set(auth(admin.body.accessToken, DEMO))
+      .send({ sku: 'ORD-A', name: 'A', unit: 'UND', initialStock: '5' });
+    const b = await request(app.getHttpServer())
+      .post(`/api/v1/businesses/${DEMO}/products`)
+      .set(auth(admin.body.accessToken, DEMO))
+      .send({ sku: 'ORD-B', name: 'B', unit: 'UND', initialStock: '1' });
+
+    // relatedEntityId es UUID en inventario (órdenes futuras).
+    const orderFailId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1';
+    const orderOkId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2';
+
+    const stock = app.get(InventoryStockService);
+    await expect(
+      stock.consumeForServiceOrder({
+        businessId: DEMO,
+        orderId: orderFailId,
+        actorId: admin.body.user.id,
+        lines: [
+          { productId: a.body.id, quantity: qty('2') },
+          { productId: b.body.id, quantity: qty('5') },
+        ],
+      }),
+    ).rejects.toMatchObject({ code: 'INSUFFICIENT_STOCK' });
+
+    const aAfterFail = await prisma.product.findUniqueOrThrow({ where: { id: a.body.id } });
+    expect(aAfterFail.stock.toString()).toBe('5');
+
+    await stock.consumeForServiceOrder({
+      businessId: DEMO,
+      orderId: orderOkId,
+      actorId: admin.body.user.id,
+      lines: [
+        { productId: a.body.id, quantity: qty('2') },
+        { productId: b.body.id, quantity: qty('1') },
+      ],
+    });
+    await stock.consumeForServiceOrder({
+      businessId: DEMO,
+      orderId: orderOkId,
+      actorId: admin.body.user.id,
+      lines: [
+        { productId: a.body.id, quantity: qty('2') },
+        { productId: b.body.id, quantity: qty('1') },
+      ],
+    });
+
+    const aOk = await prisma.product.findUniqueOrThrow({ where: { id: a.body.id } });
+    const bOk = await prisma.product.findUniqueOrThrow({ where: { id: b.body.id } });
+    expect(aOk.stock.toString()).toBe('3');
+    expect(bOk.stock.toString()).toBe('0');
+    expect(
+      await prisma.inventoryMovement.count({
+        where: { relatedEntityId: orderOkId, type: 'EXIT' },
+      }),
+    ).toBe(2);
+  });
+
   it('inactivar no impide un EXIT interno (orden abierta)', async () => {
     const admin = await login('admin@fleet.local');
     const created = await request(app.getHttpServer())
@@ -266,5 +395,168 @@ describe('Productos e inventario (Postgres)', () => {
     const product = await prisma.product.findUniqueOrThrow({ where: { id: created.body.id } });
     expect(product.status).toBe('INACTIVE');
     expect(product.stock.toString()).toBe('2');
+  });
+
+  it('recepción con línea de otro tenant no deja stock ni receipt parcial', async () => {
+    const admin = await login('admin@fleet.local');
+    const demoOil = await request(app.getHttpServer())
+      .post(`/api/v1/businesses/${DEMO}/products`)
+      .set(auth(admin.body.accessToken, DEMO))
+      .send({ sku: 'TX-OIL', name: 'Aceite TX', unit: 'L', initialStock: '2' });
+
+    const norte = await login('admin@norte.local');
+    const norteOil = await request(app.getHttpServer())
+      .post(`/api/v1/businesses/${NORTE}/products`)
+      .set(auth(norte.body.accessToken, NORTE))
+      .send({ sku: 'TX-OIL-N', name: 'Aceite Norte', unit: 'L', initialStock: '9' });
+
+    const before = await prisma.product.findUniqueOrThrow({ where: { id: demoOil.body.id } });
+    const movementsBefore = await prisma.inventoryMovement.count({
+      where: { businessId: DEMO, productId: demoOil.body.id },
+    });
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/businesses/${DEMO}/purchase-receipts`)
+      .set(auth(admin.body.accessToken, DEMO))
+      .send({
+        supplierName: 'Cruz tenant',
+        receivedAt: new Date().toISOString(),
+        lines: [
+          { productId: demoOil.body.id, quantity: '3.000', unit: 'L' },
+          { productId: norteOil.body.id, quantity: '1.000', unit: 'L' },
+        ],
+      })
+      .expect(404);
+
+    const after = await prisma.product.findUniqueOrThrow({ where: { id: demoOil.body.id } });
+    expect(after.stock.toString()).toBe(before.stock.toString());
+    expect(
+      await prisma.inventoryMovement.count({
+        where: { businessId: DEMO, productId: demoOil.body.id },
+      }),
+    ).toBe(movementsBefore);
+    expect(await prisma.purchaseReceipt.count({ where: { businessId: DEMO, supplierName: 'Cruz tenant' } })).toBe(
+      0,
+    );
+  });
+
+  it('salida y ajuste concurrentes: stock nunca negativo y último movimiento cuadra saldo', async () => {
+    const admin = await login('admin@fleet.local');
+    const created = await request(app.getHttpServer())
+      .post(`/api/v1/businesses/${DEMO}/products`)
+      .set(auth(admin.body.accessToken, DEMO))
+      .send({ sku: 'TX-CONC', name: 'Conc TX', unit: 'UND', initialStock: '5' });
+
+    const stock = app.get(InventoryStockService);
+    const results = await Promise.allSettled([
+      stock.apply({
+        businessId: DEMO,
+        productId: created.body.id,
+        type: 'EXIT',
+        quantity: qty('4'),
+        operationKey: `exit:conc:a:${created.body.id}`,
+        actorId: admin.body.user.id,
+        reason: 'A',
+      }),
+      stock.apply({
+        businessId: DEMO,
+        productId: created.body.id,
+        type: 'EXIT',
+        quantity: qty('4'),
+        operationKey: `exit:conc:b:${created.body.id}`,
+        actorId: admin.body.user.id,
+        reason: 'B',
+      }),
+      stock.apply({
+        businessId: DEMO,
+        productId: created.body.id,
+        type: 'ADJUSTMENT',
+        quantity: qty('10'),
+        operationKey: `adj:conc:${created.body.id}`,
+        actorId: admin.body.user.id,
+        reason: 'Conteo paralelo',
+      }),
+    ]);
+
+    const product = await prisma.product.findUniqueOrThrow({ where: { id: created.body.id } });
+    expect(Number(product.stock)).toBeGreaterThanOrEqual(0);
+    const last = await prisma.inventoryMovement.findFirst({
+      where: { productId: created.body.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect(last).toBeTruthy();
+    expect(last!.stockAfter.toString()).toBe(product.stock.toString());
+    expect(results.filter((r) => r.status === 'fulfilled').length).toBeGreaterThanOrEqual(1);
+    // Con ajuste paralelo ambos EXIT pueden pasar; lo crítico es saldo ≥ 0 y alineado.
+  });
+
+  it('dos consumeForServiceOrder concurrentes compiten por el mismo stock', async () => {
+    const admin = await login('admin@fleet.local');
+    const created = await request(app.getHttpServer())
+      .post(`/api/v1/businesses/${DEMO}/products`)
+      .set(auth(admin.body.accessToken, DEMO))
+      .send({ sku: 'TX-ORD-RACE', name: 'Race', unit: 'UND', initialStock: '5' });
+
+    const orderA = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1';
+    const orderB = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2';
+    const stock = app.get(InventoryStockService);
+
+    const results = await Promise.allSettled([
+      stock.consumeForServiceOrder({
+        businessId: DEMO,
+        orderId: orderA,
+        actorId: admin.body.user.id,
+        lines: [{ productId: created.body.id, quantity: qty('4') }],
+      }),
+      stock.consumeForServiceOrder({
+        businessId: DEMO,
+        orderId: orderB,
+        actorId: admin.body.user.id,
+        lines: [{ productId: created.body.id, quantity: qty('4') }],
+      }),
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    const rejected = results.filter((r) => r.status === 'rejected');
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+
+    const product = await prisma.product.findUniqueOrThrow({ where: { id: created.body.id } });
+    expect(product.stock.toString()).toBe('1');
+    expect(
+      await prisma.inventoryMovement.count({
+        where: { productId: created.body.id, type: 'EXIT', relatedEntityType: 'SERVICE_ORDER' },
+      }),
+    ).toBe(1);
+  });
+
+  it('misma operationKey concurrente no duplica EXIT', async () => {
+    const admin = await login('admin@fleet.local');
+    const created = await request(app.getHttpServer())
+      .post(`/api/v1/businesses/${DEMO}/products`)
+      .set(auth(admin.body.accessToken, DEMO))
+      .send({ sku: 'TX-KEY-RACE', name: 'Key race', unit: 'UND', initialStock: '6' });
+
+    const stock = app.get(InventoryStockService);
+    const input = {
+      businessId: DEMO,
+      productId: created.body.id,
+      type: 'EXIT' as const,
+      quantity: qty('2'),
+      operationKey: `sale:race:${created.body.id}`,
+      actorId: admin.body.user.id,
+      reason: 'venta',
+    };
+    const results = await Promise.allSettled([stock.apply(input), stock.apply(input)]);
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    expect(fulfilled.length).toBeGreaterThanOrEqual(1);
+
+    const product = await prisma.product.findUniqueOrThrow({ where: { id: created.body.id } });
+    expect(product.stock.toString()).toBe('4');
+    expect(
+      await prisma.inventoryMovement.count({
+        where: { productId: created.body.id, operationKey: input.operationKey },
+      }),
+    ).toBe(1);
   });
 });

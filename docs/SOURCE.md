@@ -6,6 +6,7 @@ Copia de trabajo para el API Nest (`back-fleet-management`).
 | --- | --- |
 | `api-contracts/` | `fleet-management/docs/api-contracts/` |
 | `arquitectura-comercial/` | `fleet-management/docs/arquitectura-comercial/` |
+| `estrategia/` | `fleet-management/docs/estrategia/` |
 | `analysis/` | `fleet-management/docs/analysis/` |
 | `domain-model.md` | `fleet-management/docs/domain-model.md` |
 | `PLAN_EJECUCION_COMPLETO.md` | `fleet-management/docs/PLAN_EJECUCION_COMPLETO.md` |

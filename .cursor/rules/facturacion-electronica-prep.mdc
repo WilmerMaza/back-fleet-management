@@ -1,0 +1,31 @@
+---
+description: Restricciones de preparación FE (doc 11) — sin DIAN, sin IVA inventado
+alwaysApply: true
+---
+
+# Preparación facturación electrónica
+
+Fuente: `docs/arquitectura-comercial/11-preparacion-facturacion-electronica.md`.
+Complementa README comercial, `06-decisiones-tecnicas` y `10-ventas-directas`. **No** sustituye `docs/api-contracts/`.
+
+## Obligatorio
+
+1. Respetar modelos y contratos actuales.
+2. Precio comercial del producto = `salePrice` (Prisma/API); distinto de `stock` / `minStock` y de cualquier costo.
+3. El front mapea `price` ↔ `salePrice`; no renombrar contratos sin documentar el cambio.
+4. Exponer/editar `salePrice` en producto solo con alcance aprobado (DT-04 producto).
+5. Cantidades/stock: `Decimal(14,3)`; no inventar otra escala sin contrato.
+6. `unit` texto libre; no inventar códigos DIAN de unidad.
+7. No inventar tarifas IVA ni clasificación tributaria en schema/DTO.
+8. No implementar costos ni valoración monetaria de inventario.
+9. Separar inventario (movimientos) de documentos comerciales / emisión.
+10. Completar orden ≠ emitir factura.
+11. Catálogo vigente no reescribe líneas históricas (snapshots).
+12. No implementar motor FE, DIAN ni proveedor tecnológico en esta fase.
+
+## Proceso
+
+- Antes de migrar o cambiar contrato: verificar si el campo ya existe; documentar en doc 11.
+- Decisiones FE-01…FE-07 pendientes hasta validación tributaria.
+- `ServiceType` sin `salePrice` hasta desbloquear DT-04 servicio.
+- Secretos del PT: nunca plaintext en `businesses`.

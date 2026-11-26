@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { InventoryModule } from '../inventory/inventory.module.js';
+import { ProductCatalogModule } from '../product-catalog/product-catalog.module.js';
 import { ChangeProductStatusUseCase } from './application/change-product-status.use-case.js';
 import { CreateProductUseCase } from './application/create-product.use-case.js';
 import { GetProductUseCase } from './application/get-product.use-case.js';
@@ -8,7 +9,7 @@ import { UpdateProductUseCase } from './application/update-product.use-case.js';
 import { ProductsController } from './presentation/products.controller.js';
 
 @Module({
-  imports: [InventoryModule],
+  imports: [InventoryModule, ProductCatalogModule],
   controllers: [ProductsController],
   providers: [
     CreateProductUseCase,

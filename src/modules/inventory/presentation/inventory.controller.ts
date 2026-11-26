@@ -5,18 +5,29 @@ import { RequirePermission } from '../../../shared/authorization/require-permiss
 import { CurrentContext } from '../../../shared/tenant/current-context.decorator.js';
 import type { RequestContext } from '../../../shared/tenant/request-context.js';
 import { Errors } from '../../../shared/common/app-error.js';
-import { qty } from '../../../shared/common/decimal.js';
-import { InventoryStockService } from '../application/inventory-stock.service.js';
+import { AdjustInventoryUseCase } from '../application/adjust-inventory.use-case.js';
+import { CreatePurchaseReceiptUseCase } from '../application/create-purchase-receipt.use-case.js';
 import { ListMovementsUseCase } from '../application/list-movements.use-case.js';
-import { AdjustInventoryDto, ListMovementsQueryDto, RegisterEntryDto } from './dto/inventory.dto.js';
-import { presentMovement } from './inventory.presenter.js';
+import { RegisterManualEntryUseCase } from '../application/register-manual-entry.use-case.js';
+import { RegisterManualExitUseCase } from '../application/register-manual-exit.use-case.js';
+import {
+  AdjustInventoryDto,
+  CreatePurchaseReceiptDto,
+  ListMovementsQueryDto,
+  RegisterEntryDto,
+  RegisterExitDto,
+} from './dto/inventory.dto.js';
+import { presentMovement, presentPurchaseReceipt } from './inventory.presenter.js';
 
 @Controller('businesses/:businessId')
 @UseGuards(AuthGuard)
 export class InventoryController {
   constructor(
-    private readonly stock: InventoryStockService,
     private readonly listMovements: ListMovementsUseCase,
+    private readonly registerEntry: RegisterManualEntryUseCase,
+    private readonly registerExit: RegisterManualExitUseCase,
+    private readonly adjustInventory: AdjustInventoryUseCase,
+    private readonly createPurchaseReceipt: CreatePurchaseReceiptUseCase,
   ) {}
 
   @Get('inventory-movements')
@@ -39,22 +50,58 @@ export class InventoryController {
 
   @Post('inventory-movements')
   @RequirePermission(Permission.InventoryWrite)
-  async registerEntry(
+  async registerMovement(
     @Param('businessId') businessId: string,
     @Body() body: RegisterEntryDto,
     @CurrentContext() ctx: RequestContext,
   ) {
-    if (body.type !== 'ENTRY') {
-      throw Errors.invalidMovement('El endpoint público solo admite entradas manuales.');
+    if (body.type === 'ENTRY') {
+      const movement = await this.registerEntry.execute({
+        businessId,
+        actorId: ctx.userId,
+        productId: body.productId,
+        quantity: body.quantity,
+        reason: body.reason,
+        operationKey: body.operationKey,
+        operatedAt: body.operatedAt,
+      });
+      return presentMovement(movement);
     }
-    const movement = await this.stock.apply({
+    if (body.type === 'EXIT') {
+      if (!body.reason?.trim()) {
+        throw Errors.invalidMovement('El motivo de la salida es obligatorio.');
+      }
+      const movement = await this.registerExit.execute({
+        businessId,
+        actorId: ctx.userId,
+        productId: body.productId,
+        quantity: body.quantity,
+        reason: body.reason,
+        operationKey: body.operationKey,
+        operatedAt: body.operatedAt,
+      });
+      return presentMovement(movement);
+    }
+    throw Errors.invalidMovement(
+      'Use /inventory-adjustments para ajustes o /purchase-receipts para compras.',
+    );
+  }
+
+  @Post('inventory-exits')
+  @RequirePermission(Permission.InventoryWrite)
+  async exit(
+    @Param('businessId') businessId: string,
+    @Body() body: RegisterExitDto,
+    @CurrentContext() ctx: RequestContext,
+  ) {
+    const movement = await this.registerExit.execute({
       businessId,
-      productId: body.productId,
-      type: 'ENTRY',
-      quantity: qty(body.quantity),
-      reason: body.reason,
-      relatedEntityType: 'MANUAL',
       actorId: ctx.userId,
+      productId: body.productId,
+      quantity: body.quantity,
+      reason: body.reason,
+      operationKey: body.operationKey,
+      operatedAt: body.operatedAt,
     });
     return presentMovement(movement);
   }
@@ -66,15 +113,34 @@ export class InventoryController {
     @Body() body: AdjustInventoryDto,
     @CurrentContext() ctx: RequestContext,
   ) {
-    const movement = await this.stock.apply({
+    const movement = await this.adjustInventory.execute({
       businessId,
-      productId: body.productId,
-      type: 'ADJUSTMENT',
-      quantity: qty(body.targetStock),
-      reason: body.reason,
-      relatedEntityType: 'MANUAL',
       actorId: ctx.userId,
+      productId: body.productId,
+      targetStock: body.targetStock,
+      reason: body.reason,
+      operationKey: body.operationKey,
     });
     return presentMovement(movement);
+  }
+
+  @Post('purchase-receipts')
+  @RequirePermission(Permission.InventoryWrite)
+  async purchaseReceipt(
+    @Param('businessId') businessId: string,
+    @Body() body: CreatePurchaseReceiptDto,
+    @CurrentContext() ctx: RequestContext,
+  ) {
+    const receipt = await this.createPurchaseReceipt.execute({
+      businessId,
+      actorId: ctx.userId,
+      supplierName: body.supplierName,
+      documentRef: body.documentRef,
+      receivedAt: body.receivedAt,
+      notes: body.notes,
+      operationKey: body.operationKey,
+      lines: body.lines,
+    });
+    return presentPurchaseReceipt(receipt);
   }
 }

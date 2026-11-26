@@ -33,7 +33,7 @@ type RotateResult =
   | {
       ok: true;
       userId: string;
-      activeBusinessId: string;
+      activeBusinessId: string | null;
       refreshToken: string;
       familyId: string;
       sessionId: string;
@@ -135,6 +135,36 @@ export class RefreshSessionUseCase {
 
     if (!rotated.ok) {
       throw Errors.unauthorized();
+    }
+
+    if (rotated.activeBusinessId === null) {
+      const pending = await this.prisma.businessRegistrationRequest.findFirst({
+        where: { applicantUserId: rotated.userId, status: 'PENDING' },
+        include: {
+          business: true,
+          applicant: true,
+        },
+      });
+      if (pending) {
+        const membership = await this.prisma.userBusinessMembership.findUnique({
+          where: {
+            userId_businessId: { userId: rotated.userId, businessId: pending.businessId },
+          },
+        });
+        if (membership) {
+          return this.sessions.composeOnboardingResponse(
+            pending.applicant,
+            {
+              roleCodes: membership.roleCodes,
+              business: pending.business,
+            },
+            pending.status,
+            rotated.refreshToken,
+            rotated.familyId,
+            rotated.sessionId,
+          );
+        }
+      }
     }
 
     return this.sessions.issueAccessOnly(

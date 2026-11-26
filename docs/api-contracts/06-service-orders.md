@@ -80,6 +80,14 @@ El back rellena `createdBy` / `closedByUserId` desde la sesión. El cliente pued
 
 Historial de la ficha: hasta que exista `GET .../audit-logs?entityType=SERVICE_ORDER&entityId=`, el repositorio expone `listActivity` (mock lee `audit_logs` de la orden y adjuntos cuyo padre es la orden). No hay estado ni evidencias por ítem: `attachments.entityType=SERVICE_ORDER`.
 
+## Implementación Nest (Lote 4)
+
+- Módulo `src/modules/service-orders/` (greenfield + ports).
+- `POST …/complete` usa `InventoryStockService.consumeForServiceOrder` **en la misma TX**.
+- Create no descuenta stock. IDs UUID.
+- Desviación temporal: complete **no** hace upsert de `maintenance_schedules` (tablas ausentes; D3).
+- Extensión mock 16 (autorizaciones / recordConsumption HTTP) **no** está en Nest aún.
+
 ## Criterios de aceptación
 
 - No editar órdenes COMPLETED/CANCELLED.

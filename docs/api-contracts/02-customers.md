@@ -25,9 +25,14 @@
   "contactName": "...",
   "phone": "...",
   "email": "...",
-  "address": "..."
+  "address": "...",
+  "verificationDigit": "1",
+  "municipality": "Bogotá",
+  "department": "Cundinamarca"
 }
 ```
+
+Campos opcionales de preparación FE (`verificationDigit`, `municipality`, `department`): no obligatorios en CRUD; sin catálogo DIVIPOLA ni validación de DV en esta fase. Ver `docs/arquitectura-comercial/11-preparacion-facturacion-electronica.md`.
 
 ## Reglas
 
@@ -82,7 +87,7 @@ Propuesta de producto (no aplicada en el cliente):
 
 ### Campos opcionales que se pueden vaciar en el formulario
 
-Compartidos: `phone`, `email`, `address`. COMPANY: `tradeName`, `contactName`. PERSON: `lastName` (no es obligatorio, DC-6). Los obligatorios del tipo no se vacían: el formulario los valida.
+Compartidos: `phone`, `email`, `address`, `verificationDigit`, `municipality`, `department`. COMPANY: `tradeName`, `contactName`. PERSON: `lastName` (no es obligatorio, DC-6). Los obligatorios del tipo no se vacían: el formulario los valida.
 
 ### Cambio requerido en backend
 

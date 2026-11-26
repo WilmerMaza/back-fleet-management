@@ -4,6 +4,7 @@ import { PrismaService } from '../../../shared/database/prisma.service.js';
 import { AuditService } from '../../audit/audit.service.js';
 import { Errors } from '../../../shared/common/app-error.js';
 import { assertMoney, assertQuantity, qty } from '../../../shared/common/decimal.js';
+import { ResolveProductClassification } from '../../product-catalog/application/resolve-product-classification.js';
 import { normalizeSku } from '../domain/sku.js';
 
 export interface UpdateProductInput {
@@ -12,6 +13,7 @@ export interface UpdateProductInput {
   description?: string | null;
   unit?: string;
   categoryId?: string | null;
+  brandId?: string | null;
   minStock?: string;
   salePrice?: string | null;
 }
@@ -21,6 +23,7 @@ export class UpdateProductUseCase {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly classification: ResolveProductClassification,
   ) {}
 
   async execute(
@@ -39,7 +42,7 @@ export class UpdateProductUseCase {
       throw Errors.productNotFound();
     }
 
-    const data: Prisma.ProductUpdateInput = { updatedBy: actorId };
+    const data: Prisma.ProductUncheckedUpdateInput = { updatedBy: actorId };
     if (input.sku != null) {
       data.sku = normalizeSku(input.sku);
     }
@@ -52,9 +55,6 @@ export class UpdateProductUseCase {
     if (input.unit != null) {
       data.unit = input.unit.trim();
     }
-    if (input.categoryId !== undefined) {
-      data.categoryId = input.categoryId;
-    }
     if (input.minStock != null) {
       data.minStock = new Prisma.Decimal(assertQuantity(qty(input.minStock), true).toFixed(3));
     }
@@ -65,9 +65,41 @@ export class UpdateProductUseCase {
           : new Prisma.Decimal(assertMoney(qty(input.salePrice)).toFixed(2));
     }
 
+    if (input.categoryId !== undefined) {
+      const hasCats = await this.classification.businessHasActiveCategories(businessId);
+      if (hasCats && !input.categoryId) {
+        throw Errors.categoryRequired();
+      }
+      if (input.categoryId) {
+        const { categoryId } = await this.classification.assertAssignable(businessId, {
+          categoryId: input.categoryId,
+          requireCategory: false,
+        });
+        data.categoryId = categoryId;
+      } else {
+        data.categoryId = null;
+      }
+    }
+
+    if (input.brandId !== undefined) {
+      if (input.brandId) {
+        const { brandId } = await this.classification.assertAssignable(businessId, {
+          brandId: input.brandId,
+          requireCategory: false,
+        });
+        data.brandId = brandId;
+      } else {
+        data.brandId = null;
+      }
+    }
+
     try {
       const product = await this.prisma.$transaction(async (tx) => {
-        const updated = await tx.product.update({ where: { id }, data });
+        const updated = await tx.product.update({
+          where: { id },
+          data,
+          include: { category: { include: { parent: true } }, brand: true },
+        });
         await this.audit.record(
           {
             businessId,

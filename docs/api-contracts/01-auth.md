@@ -15,16 +15,30 @@ Response 200:
 ```json
 {
   "accessToken": "...",
-  "refreshToken": "...",
+  "csrfToken": "...",
   "user": { "id": "...", "email": "...", "fullName": "...", "roleCodes": ["ADMIN"], "businessId": "..." },
   "business": { "id": "...", "name": "..." },
   "availableBusinesses": [{ "id": "...", "name": "..." }]
 }
 ```
 
+Cookies (D4):
+
+- `konti_refresh` — HttpOnly, `Path=/api/v1/auth`, `SameSite=Lax`, `Secure` en producción.
+- `XSRF-TOKEN` — legible por JS (mismo Path/SameSite); el SPA lo reenvía en `X-XSRF-TOKEN`.
+
+El `refreshToken` **no** viaja en el JSON. El access sigue en body + `Authorization: Bearer`.
+
 ### POST `/auth/refresh`
 
-Body: `{ "refreshToken": "..." }` → nueva sesión.
+- Preferido (SPA): cookie `konti_refresh` + header `X-XSRF-TOKEN` (debe coincidir con cookie `XSRF-TOKEN`). Body vacío.
+- Fallback (tests/curl): `{ "refreshToken": "..." }` sin CSRF.
+
+Respuesta: misma forma pública que login (access + `csrfToken`, sin refresh en JSON) y rota ambas cookies.
+
+### POST `/auth/logout`
+
+Cookie o body como refresh; CSRF obligatorio si usa cookie. Revoca la familia y limpia cookies (204).
 
 ### POST `/auth/forgot-password`
 

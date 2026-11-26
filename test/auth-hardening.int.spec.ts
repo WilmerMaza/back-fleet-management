@@ -8,12 +8,14 @@ import { execSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import cookieParser from 'cookie-parser';
 import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
 import { hashRefreshToken } from '../src/modules/identity/domain/token-hash.js';
 import { AuthRateLimiter } from '../src/shared/authorization/auth-rate-limiter.js';
 import { permissionsForRoles } from '../src/shared/authorization/permissions.js';
 import { PrismaService } from '../src/shared/database/prisma.service.js';
+import { refreshTokenFromSetCookie } from './auth-cookie-helpers.js';
 
 let container: StartedPostgreSqlContainer;
 let app: INestApplication;
@@ -53,6 +55,7 @@ describe('Auth hardening SEC-01/02/03 (Postgres)', () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('api/v1');
+    app.use(cookieParser());
     app.useGlobalPipes(
       new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
     );
@@ -135,7 +138,8 @@ describe('Auth hardening SEC-01/02/03 (Postgres)', () => {
   it('SEC-02: tras logout el access token deja de autorizar', async () => {
     const session = await login('inventario@fleet.local');
     expect(session.status).toBe(200);
-    const { accessToken, refreshToken } = session.body;
+    const accessToken = session.body.accessToken as string;
+    const refreshToken = refreshTokenFromSetCookie(session);
 
     await request(app.getHttpServer())
       .get(`/api/v1/businesses/${DEMO}/products`)
@@ -162,7 +166,7 @@ describe('Auth hardening SEC-01/02/03 (Postgres)', () => {
     const session = await login('admin@fleet.local');
     expect(session.status).toBe(200);
     const row = await prisma.authRefreshSession.findUniqueOrThrow({
-      where: { tokenHash: hashRefreshToken(session.body.refreshToken) },
+      where: { tokenHash: hashRefreshToken(refreshTokenFromSetCookie(session)) },
     });
 
     await prisma.authRefreshSession.updateMany({
@@ -318,8 +322,8 @@ describe('Auth hardening SEC-01/02/03 (Postgres)', () => {
   it('H-04 regresión: reutilizar refresh revoca familia y el access muere', async () => {
     const session = await login('admin@norte.local');
     expect(session.status).toBe(200);
-    const original = session.body.refreshToken;
-    const access = session.body.accessToken;
+    const original = refreshTokenFromSetCookie(session);
+    const access = session.body.accessToken as string;
 
     const rotated = await request(app.getHttpServer())
       .post('/api/v1/auth/refresh')
