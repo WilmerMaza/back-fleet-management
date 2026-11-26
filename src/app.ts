@@ -11,6 +11,7 @@ import { NestFactory } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import express from 'express';
+import { renderKontiApiHomePage } from './shared/http/konti-api-home.page.js';
 import { AppLogger } from './shared/logging/app-logger.js';
 
 const BOOTSTRAP = 'Bootstrap';
@@ -174,23 +175,56 @@ function ensureNestMounted(): Promise<void> {
   return mountPromise;
 }
 
+function wantsHtmlHome(req: express.Request): boolean {
+  if (req.method !== 'GET') {
+    return false;
+  }
+  if (req.path !== '/' && req.path !== '') {
+    return false;
+  }
+  const accept = req.headers.accept ?? '';
+  // Probes / curl sin Accept HTML siguen pudiendo pedir JSON con ?format=json
+  if (req.query.format === 'json') {
+    return false;
+  }
+  return accept.includes('text/html') || accept === '' || accept.includes('*/*');
+}
+
+function sendApiHome(res: express.Response): void {
+  const status = bootError ? 'error' : nestReady ? 'ok' : 'starting';
+  const html = renderKontiApiHomePage({
+    status,
+    errorMessage: bootError?.errorMessage,
+  });
+  res.status(bootError ? 503 : 200).type('html').send(html);
+}
+
 expressApp.use((req, res, next) => {
   void (async () => {
+    const home = wantsHtmlHome(req);
+
+    if (!nestReady && !bootError) {
+      bootLog('info', 'bootstrap:await_mount', { path: req.path });
+      await ensureNestMounted();
+    }
+
+    if (home) {
+      sendApiHome(res);
+      return;
+    }
+
     if (bootError) {
       res.status(503).type('json').send(JSON.stringify(bootError));
       return;
     }
-    if (!nestReady) {
-      bootLog('info', 'bootstrap:await_mount', { path: req.path });
-      await ensureNestMounted();
-      if (bootError) {
-        res.status(503).type('json').send(JSON.stringify(bootError));
-        return;
-      }
-    }
+
     next();
   })().catch((err: unknown) => {
     bootError = toFailedPayload(err);
+    if (wantsHtmlHome(req)) {
+      sendApiHome(res);
+      return;
+    }
     res.status(503).type('json').send(JSON.stringify(bootError));
   });
 });
