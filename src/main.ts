@@ -41,7 +41,7 @@ const payload = {
   timestamp: new Date().toISOString(),
 };
 
-console.log(JSON.stringify({ level: 'info', message: 'diagnostic:start', ...payload }));
+console.log(JSON.stringify({ level: 'info', event: 'diagnostic:start', payload }));
 
 createServer((req, res) => {
   console.log(
