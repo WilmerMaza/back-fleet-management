@@ -14,7 +14,7 @@ import express from 'express';
 import { AppLogger } from './shared/logging/app-logger.js';
 
 const BOOTSTRAP = 'Bootstrap';
-const CREATE_TIMEOUT_MS = 25_000;
+const CREATE_TIMEOUT_MS = 45_000;
 
 type BootstrapPayload = {
   status: 'bootstrap_failed' | 'starting';
