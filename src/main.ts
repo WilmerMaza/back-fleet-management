@@ -1,14 +1,10 @@
 /**
- * Entrypoint HTTP de la API KONTI (Vercel + local).
+ * Entrypoint HTTP de la API KONTI en Vercel (preset Express) + local.
  *
- * En Vercel Fluid/NestJS la invocación espera el top-level await. Si ese await
- * incluye NestFactory.create/app.init, un hang o crash de init deja la request
- * sin respuesta → INTERNAL_FUNCTION_INVOCATION_FAILED y logs Hobby vacíos.
- *
- * Orden:
- * 1) listen() Express inmediato
- * 2) resolver el top-level await (la función ya puede responder)
- * 3) montar Nest en background; si falla, /health sirve bootstrap_failed JSON
+ * El preset NestJS de Vercel captura NestFactory/listen y no enruta un
+ * Express temprano: los fallos de init terminan en INTERNAL_FUNCTION_INVOCATION_FAILED
+ * sin body ni logs Hobby. Con `export default expressApp` Vercel enruta de inmediato;
+ * Nest se monta encima y /health puede devolver `starting` o `bootstrap_failed`.
  */
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
@@ -104,100 +100,90 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   });
 }
 
-async function bootstrap() {
-  const port = Number(process.env.PORT ?? 3000);
-  const expressApp = express();
+const expressApp = express();
+let nestReady = false;
+let bootError: BootstrapPayload | null = null;
 
-  let nestReady = false;
-  let bootError: BootstrapPayload | null = null;
-
-  // Middleware diagnóstico: responde antes de Nest si aún no está listo / falló.
-  expressApp.use((req, res, next) => {
-    if (bootError) {
-      res.status(503).type('json').send(JSON.stringify(bootError));
-      return;
-    }
-    if (!nestReady) {
+expressApp.use((req, res, next) => {
+  if (bootError) {
+    res.status(503).type('json').send(JSON.stringify(bootError));
+    return;
+  }
+  if (!nestReady) {
+    if (req.path === '/' || req.path.endsWith('/health')) {
       const starting: BootstrapPayload = {
         status: 'starting',
         env: describeStartupEnv(),
       };
-      // Solo /health (y raíz) muestran "starting"; el resto espera a Nest.
-      if (req.path === '/' || req.path.endsWith('/health')) {
-        res.status(503).type('json').send(JSON.stringify(starting));
-        return;
-      }
+      res.status(503).type('json').send(JSON.stringify(starting));
+      return;
     }
-    next();
-  });
+  }
+  next();
+});
 
+async function mountNest(): Promise<void> {
   bootLog('info', 'bootstrap:start', describeStartupEnv());
+  try {
+    bootLog('info', 'bootstrap:importing_app_module');
+    const { AppModule } = await import('./app.module.js');
 
-  await new Promise<void>((resolve, reject) => {
-    const server = expressApp.listen(port, () => resolve());
-    server.once('error', reject);
-  });
-  bootLog('info', 'bootstrap:early_listen', {
-    port,
-    hint: 'HTTP live; Nest mounts in background so Vercel can route requests',
-  });
+    bootLog('info', 'bootstrap:creating_app');
+    const app = await withTimeout(
+      NestFactory.create(AppModule, new ExpressAdapter(expressApp), {
+        bufferLogs: true,
+        abortOnError: false,
+      }),
+      CREATE_TIMEOUT_MS,
+      'NestFactory.create',
+    );
 
-  // No await: en Vercel el top-level await debe terminar tras listen.
-  // Si awaitamos Nest aquí, un hang de init → INTERNAL_FUNCTION_INVOCATION_FAILED.
-  void (async () => {
-    try {
-      bootLog('info', 'bootstrap:importing_app_module');
-      const { AppModule } = await import('./app.module.js');
+    const logger = app.get(AppLogger);
+    app.useLogger(logger);
+    app.setGlobalPrefix('api/v1');
+    app.use(cookieParser());
+    const corsOrigin = process.env.CORS_ORIGIN ?? 'http://localhost:4200';
+    app.enableCors({
+      origin: corsOrigin,
+      credentials: true,
+    });
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
+    );
 
-      bootLog('info', 'bootstrap:creating_app');
-      const app = await withTimeout(
-        NestFactory.create(AppModule, new ExpressAdapter(expressApp), {
-          bufferLogs: true,
-          abortOnError: false,
-        }),
-        CREATE_TIMEOUT_MS,
-        'NestFactory.create',
-      );
-
-      const logger = app.get(AppLogger);
-      app.useLogger(logger);
-      app.setGlobalPrefix('api/v1');
-      app.use(cookieParser());
-      const corsOrigin = process.env.CORS_ORIGIN ?? 'http://localhost:4200';
-      app.enableCors({
-        origin: corsOrigin,
-        credentials: true,
-      });
-      app.useGlobalPipes(
-        new ValidationPipe({
-          whitelist: true,
-          forbidNonWhitelisted: true,
-          transform: true,
-        }),
-      );
-
-      bootLog('info', 'bootstrap:init');
-      await withTimeout(app.init(), CREATE_TIMEOUT_MS, 'app.init');
-      nestReady = true;
-      bootLog('info', 'bootstrap:ready', { url: `http://localhost:${port}/api/v1` });
-      logger.log(`KONTI API en http://localhost:${port}/api/v1`, BOOTSTRAP);
-    } catch (err) {
-      bootError = toFailedPayload(err);
-      bootLog('error', 'bootstrap:failed', bootError as unknown as Record<string, unknown>);
-    }
-  })();
+    bootLog('info', 'bootstrap:init');
+    await withTimeout(app.init(), CREATE_TIMEOUT_MS, 'app.init');
+    nestReady = true;
+    bootLog('info', 'bootstrap:ready');
+    logger.log('KONTI API lista (Express + Nest)', BOOTSTRAP);
+  } catch (err) {
+    bootError = toFailedPayload(err);
+    bootLog('error', 'bootstrap:failed', bootError as unknown as Record<string, unknown>);
+  }
 }
 
 process.on('uncaughtException', (err) => {
-  bootLog('error', 'bootstrap:uncaughtException', toFailedPayload(err) as unknown as Record<string, unknown>);
+  bootError = toFailedPayload(err);
+  bootLog('error', 'bootstrap:uncaughtException', bootError as unknown as Record<string, unknown>);
 });
 
 process.on('unhandledRejection', (reason) => {
-  bootLog(
-    'error',
-    'bootstrap:unhandledRejection',
-    toFailedPayload(reason) as unknown as Record<string, unknown>,
-  );
+  bootError = toFailedPayload(reason);
+  bootLog('error', 'bootstrap:unhandledRejection', bootError as unknown as Record<string, unknown>);
 });
 
-await bootstrap();
+void mountNest();
+
+// Local: listen explícito. En Vercel el preset Express usa el export.
+if (!process.env.VERCEL) {
+  const port = Number(process.env.PORT ?? 3000);
+  expressApp.listen(port, () => {
+    bootLog('info', 'bootstrap:local_listen', { port });
+  });
+}
+
+export default expressApp;
