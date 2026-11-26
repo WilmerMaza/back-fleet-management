@@ -1,12 +1,14 @@
 /**
  * Entrypoint HTTP de la API KONTI (Vercel + local).
  *
- * Orden crítico en serverless:
- * 1) `listen()` inmediatamente (Vercel enruta al server)
- * 2) Montar Nest encima del mismo Express
- * 3) Si Nest falla, seguir sirviendo 503 JSON con el error real
+ * En Vercel Fluid/NestJS la invocación espera el top-level await. Si ese await
+ * incluye NestFactory.create/app.init, un hang o crash de init deja la request
+ * sin respuesta → INTERNAL_FUNCTION_INVOCATION_FAILED y logs Hobby vacíos.
  *
- * Así no dependemos de Runtime Logs de Hobby (a menudo vacíos).
+ * Orden:
+ * 1) listen() Express inmediato
+ * 2) resolver el top-level await (la función ya puede responder)
+ * 3) montar Nest en background; si falla, /health sirve bootstrap_failed JSON
  */
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
@@ -137,49 +139,53 @@ async function bootstrap() {
   });
   bootLog('info', 'bootstrap:early_listen', {
     port,
-    hint: 'Vercel already has a live server; Nest mounts next',
+    hint: 'HTTP live; Nest mounts in background so Vercel can route requests',
   });
 
-  try {
-    bootLog('info', 'bootstrap:importing_app_module');
-    const { AppModule } = await import('./app.module.js');
+  // No await: en Vercel el top-level await debe terminar tras listen.
+  // Si awaitamos Nest aquí, un hang de init → INTERNAL_FUNCTION_INVOCATION_FAILED.
+  void (async () => {
+    try {
+      bootLog('info', 'bootstrap:importing_app_module');
+      const { AppModule } = await import('./app.module.js');
 
-    bootLog('info', 'bootstrap:creating_app');
-    const app = await withTimeout(
-      NestFactory.create(AppModule, new ExpressAdapter(expressApp), {
-        bufferLogs: true,
-        abortOnError: false,
-      }),
-      CREATE_TIMEOUT_MS,
-      'NestFactory.create',
-    );
+      bootLog('info', 'bootstrap:creating_app');
+      const app = await withTimeout(
+        NestFactory.create(AppModule, new ExpressAdapter(expressApp), {
+          bufferLogs: true,
+          abortOnError: false,
+        }),
+        CREATE_TIMEOUT_MS,
+        'NestFactory.create',
+      );
 
-    const logger = app.get(AppLogger);
-    app.useLogger(logger);
-    app.setGlobalPrefix('api/v1');
-    app.use(cookieParser());
-    const corsOrigin = process.env.CORS_ORIGIN ?? 'http://localhost:4200';
-    app.enableCors({
-      origin: corsOrigin,
-      credentials: true,
-    });
-    app.useGlobalPipes(
-      new ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
-        transform: true,
-      }),
-    );
+      const logger = app.get(AppLogger);
+      app.useLogger(logger);
+      app.setGlobalPrefix('api/v1');
+      app.use(cookieParser());
+      const corsOrigin = process.env.CORS_ORIGIN ?? 'http://localhost:4200';
+      app.enableCors({
+        origin: corsOrigin,
+        credentials: true,
+      });
+      app.useGlobalPipes(
+        new ValidationPipe({
+          whitelist: true,
+          forbidNonWhitelisted: true,
+          transform: true,
+        }),
+      );
 
-    bootLog('info', 'bootstrap:init');
-    await withTimeout(app.init(), CREATE_TIMEOUT_MS, 'app.init');
-    nestReady = true;
-    bootLog('info', 'bootstrap:ready', { url: `http://localhost:${port}/api/v1` });
-    logger.log(`KONTI API en http://localhost:${port}/api/v1`, BOOTSTRAP);
-  } catch (err) {
-    bootError = toFailedPayload(err);
-    bootLog('error', 'bootstrap:failed', bootError as unknown as Record<string, unknown>);
-  }
+      bootLog('info', 'bootstrap:init');
+      await withTimeout(app.init(), CREATE_TIMEOUT_MS, 'app.init');
+      nestReady = true;
+      bootLog('info', 'bootstrap:ready', { url: `http://localhost:${port}/api/v1` });
+      logger.log(`KONTI API en http://localhost:${port}/api/v1`, BOOTSTRAP);
+    } catch (err) {
+      bootError = toFailedPayload(err);
+      bootLog('error', 'bootstrap:failed', bootError as unknown as Record<string, unknown>);
+    }
+  })();
 }
 
 process.on('uncaughtException', (err) => {
