@@ -104,6 +104,10 @@ const expressApp = express();
 let nestReady = false;
 let bootError: BootstrapPayload | null = null;
 
+// Parsers propios: Nest 12 + Express 5 rompe en `app.router` al registrar los suyos.
+expressApp.use(express.json());
+expressApp.use(express.urlencoded({ extended: true }));
+
 expressApp.use((req, res, next) => {
   if (bootError) {
     res.status(503).type('json').send(JSON.stringify(bootError));
@@ -133,6 +137,8 @@ async function mountNest(): Promise<void> {
       NestFactory.create(AppModule, new ExpressAdapter(expressApp), {
         bufferLogs: true,
         abortOnError: false,
+        // Evita ExpressAdapter.registerParserMiddleware → app.router (roto en Express 5).
+        bodyParser: false,
       }),
       CREATE_TIMEOUT_MS,
       'NestFactory.create',
