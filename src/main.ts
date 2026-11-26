@@ -1,14 +1,14 @@
 /**
  * Entrypoint HTTP de la API KONTI.
  *
- * El bootstrap escribe hitos y errores a stderr de forma síncrona (JSON)
- * para que plataformas serverless (p. ej. Vercel) muestren la causa real
- * aunque Nest falle antes de `listen()` o con `bufferLogs`.
+ * Si Nest no arranca, en Vercel (y en general) aún así hacemos `listen()` con un
+ * servidor mínimo que responde 503 JSON con el error real. Así el fallo es
+ * visible por HTTP aunque Runtime Logs de Hobby no muestre nada.
  */
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import cookieParser from 'cookie-parser';
-import { AppModule } from './app.module.js';
+import { createServer } from 'node:http';
 import { AppLogger } from './shared/logging/app-logger.js';
 
 const BOOTSTRAP = 'Bootstrap';
@@ -62,12 +62,55 @@ function describeStartupEnv(): Record<string, unknown> {
   };
 }
 
+function toBootstrapPayload(err: unknown) {
+  const error = err instanceof Error ? err : new Error(String(err));
+  return {
+    status: 'bootstrap_failed' as const,
+    errorName: error.name,
+    errorMessage: error.message,
+    errorStack: error.stack?.split('\n').slice(0, 15) ?? [],
+    env: describeStartupEnv(),
+  };
+}
+
+/**
+ * Escucha HTTP con el error de arranque.
+ * Vercel necesita `listen()` para enrutar; process.exit solo produce
+ * INTERNAL_FUNCTION_INVOCATION_FAILED sin cuerpo útil.
+ */
+async function listenWithBootstrapError(err: unknown): Promise<void> {
+  const payload = toBootstrapPayload(err);
+  bootLog('error', 'bootstrap:failed', payload);
+
+  const port = Number(process.env.PORT ?? 3000);
+  const body = JSON.stringify(payload);
+  const server = createServer((_req, res) => {
+    res.writeHead(503, {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'no-store',
+    });
+    res.end(body);
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, () => resolve());
+  });
+
+  bootLog('info', 'bootstrap:diagnostic_listening', {
+    port,
+    hint: 'GET any path returns bootstrap_failed JSON',
+  });
+}
+
 async function bootstrap() {
   bootLog('info', 'bootstrap:start', describeStartupEnv());
 
+  // Import dinámico: si AppModule/deps fallan, aún podemos servir el 503 diagnóstico.
+  bootLog('info', 'bootstrap:importing_app_module');
+  const { AppModule } = await import('./app.module.js');
+
   bootLog('info', 'bootstrap:creating_app');
-  // abortOnError:false → el error llega a nuestro catch (JSON claro) en vez de
-  // process.exit silencioso de Nest ExceptionHandler, que en Vercel solo deja 500.
   const app = await NestFactory.create(AppModule, {
     bufferLogs: true,
     abortOnError: false,
@@ -98,28 +141,34 @@ async function bootstrap() {
   logger.log(`KONTI API en http://localhost:${port}/api/v1`, BOOTSTRAP);
 }
 
-function failBootstrap(err: unknown): never {
-  const error = err instanceof Error ? err : new Error(String(err));
-  bootLog('error', 'bootstrap:failed', {
-    errorName: error.name,
-    errorMessage: error.message,
-    errorStack: error.stack,
-    env: describeStartupEnv(),
-  });
-  // En serverless, salir evita el timeout ~60s esperando listen().
-  process.exit(1);
+let diagnosticStarted = false;
+
+async function failBootstrap(err: unknown): Promise<void> {
+  if (diagnosticStarted) {
+    return;
+  }
+  diagnosticStarted = true;
+  try {
+    await listenWithBootstrapError(err);
+  } catch (listenErr) {
+    bootLog('error', 'bootstrap:diagnostic_listen_failed', {
+      ...toBootstrapPayload(err),
+      listenError: listenErr instanceof Error ? listenErr.message : String(listenErr),
+    });
+    process.exit(1);
+  }
 }
 
 process.on('uncaughtException', (err) => {
-  failBootstrap(err);
+  void failBootstrap(err);
 });
 
 process.on('unhandledRejection', (reason) => {
-  failBootstrap(reason);
+  void failBootstrap(reason);
 });
 
 try {
   await bootstrap();
 } catch (err) {
-  failBootstrap(err);
+  await failBootstrap(err);
 }
