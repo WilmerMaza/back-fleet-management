@@ -40,7 +40,8 @@ export class PermissionResolverService {
       where: { businessId: null, code: 'SUPER_ADMIN' },
       include: { permissions: { include: { permission: true } } },
     });
-    if (!role) {
+    // Rol ausente o sin filas en role_permissions → mapa canónico (evita JWT vacío / 403).
+    if (!role || role.permissions.length === 0) {
       return [...PLATFORM_PERMISSIONS];
     }
     return [...new Set(role.permissions.map((rp) => rp.permission.code))];
