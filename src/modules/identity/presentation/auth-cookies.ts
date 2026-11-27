@@ -29,16 +29,26 @@ function isProduction(): boolean {
   return process.env.NODE_ENV === 'production';
 }
 
+/**
+ * SPA en otro sitio (p. ej. localhost:4200 → API en Vercel): `SameSite=Lax`
+ * no envía la cookie en XHR cross-site → F5 pierde la sesión.
+ * En Vercel usamos `None` + `Secure` para credentials cross-origin.
+ */
+function isCrossSiteSpa(): boolean {
+  return Boolean(process.env.VERCEL);
+}
+
 function refreshMaxAgeSec(): number {
   const expiresAt = expiresAtFromDuration(jwtRefreshExpiresIn());
   return Math.max(1, Math.floor((expiresAt.getTime() - Date.now()) / 1000));
 }
 
 function baseCookieOptions(httpOnly: boolean): CookieOptions {
+  const crossSite = isCrossSiteSpa();
   return {
     httpOnly,
-    secure: isProduction(),
-    sameSite: 'lax',
+    secure: isProduction() || crossSite,
+    sameSite: crossSite ? 'none' : 'lax',
     path: AUTH_COOKIE_PATH,
     maxAge: refreshMaxAgeSec() * 1000,
   };
@@ -61,10 +71,11 @@ export function attachSessionCookies(
 }
 
 export function clearSessionCookies(res: Response): void {
+  const crossSite = isCrossSiteSpa();
   const clearOpts: CookieOptions = {
     httpOnly: true,
-    secure: isProduction(),
-    sameSite: 'lax',
+    secure: isProduction() || crossSite,
+    sameSite: crossSite ? 'none' : 'lax',
     path: AUTH_COOKIE_PATH,
   };
   res.clearCookie(REFRESH_COOKIE, clearOpts);
